@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API key yönetimi</title>
+<link rel="stylesheet" href="../assets/site.css?v=12">
+<script src="../assets/diagrams.js?v=12"></script>
+<style>
+details.qa { padding: 10px 16px; }
+details.qa summary { cursor: pointer; font-size: 16.5px; }
+details.qa[open] summary { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="topbar-inner">
+  <a class="brand" href="../index.html">Mülakat Hazırlığı</a>
+  <nav>
+    <a href="../index.html">Ana sayfa</a>
+    <a href="../knowledge-sync/kapsam.html">Knowledge Sync</a>
+    <a href="../agent-tasks/kapsam.html">Agent Tasks</a>
+    <a href="../deployment-api/kapsam.html">Deployment API</a>
+    <a class="active" href="feature-flags.html">Basit sorular</a>
+  </nav>
+</div>
+<div class="subnav"><nav>
+    <a href="feature-flags.html">Feature flags (okuma)</a>
+    <a href="usage.html">Usage metering (yazma)</a>
+    <a class="active" href="api-keys.html">API key yönetimi</a>
+    <a href="diger.html">Diğer sorular: ne değişir?</a>
+</nav></div></header>
+
+<main class="wide">
+<h1>API key yönetimi</h1>
+<p class="lead">Güvenlik odaklı basit bir soru. Yönetim tarafı basit bir CRUD; asıl tasarım sorusu her istekteki doğrulama.</p>
+<nav class="toc"><b>Bu sayfada (playbook sırasıyla)</b><ol><li><a href="#kapsam">Kapsam</a></li><li><a href="#api">API sözleşmesi</a></li><li><a href="#cozum">Minimum çözüm</a></li><li><a href="#hata">Hata ve güvenlik</a></li><li><a href="#olcek">Ölçek ve follow-up</a></li><li><a href="#parcalar">Parçalar</a></li></ol></nav>
+<h2 id="kapsam">1 · Kapsam</h2>
+<div class="step-hint"><b>Playbook 1/5 · Kapsam.</b> kim kullanıyor, ana işlem ne, veri ne büyüklükte, ne kadar güncel olmalı? 5 dakikayı geçme.</div>
+<div class="say">Customers call our public API with API keys. Design the API to create, list, rotate and revoke keys, and how every request is authenticated with them.</div>
+<div class="table-wrap"><table>
+<tr><th>Sor</th><th>Varsayılan cevap</th><th>Neyi değiştirir?</th></tr>
+<tr><td>Kim yönetir?</td><td>Tenant admin'i, panelden ya da API'den.</td><td>Yönetim yetkisi bir rol.</td></tr>
+<tr><td>Kaç key, kaç istek?</td><td>Tenant başına ~10 key; public API saniyede 50k istek.</td><td>Doğrulama her istekte: çok hızlı olmalı.</td></tr>
+<tr><td>Key'in yetkisi?</td><td>Kapsamlı (scope), ör. <code>tasks:write</code>; isteğe bağlı son kullanma tarihi.</td><td><code>scopes</code> ve <code>expires_at</code>.</td></tr>
+<tr><td>İptal ne kadar hızlı yansımalı?</td><td>Sızan key 1 dakika içinde çalışmamalı.</td><td>Cache süresi kısa.</td></tr>
+<tr><td>Rotation?</td><td>Kesintisiz: yeni key oluştur, eskisi bir süre daha çalışsın.</td><td>İki key aynı anda geçerli.</td></tr>
+<tr><td>Audit?</td><td>Kim oluşturdu, en son ne zaman kullanıldı.</td><td><code>created_by</code>, <code>last_used_at</code>.</td></tr>
+</table></div>
+<div class="table-wrap"><table>
+<tr><th>Fonksiyonel</th><td>Oluştur (secret bir kez görünür) · listele (secret'sız) · döndür (rotate) · iptal · son kullanım zamanı.</td></tr>
+<tr><th>Fonksiyonel olmayan</th><td>Doğrulama p99 &lt; 5 ms · iptal p99 &lt; 60 sn · key'ler asla düz metin saklanmaz · doğrulama %99.99 (her istek ona bağlı).</td></tr>
+<tr><th>Kaba ölçek</th><td>500 tenant × 10 = 5.000 key · yönetim çağrısı günde birkaç yüz · doğrulama saniyede 50k.</td></tr>
+</table></div>
+<p><b>Çıkarım:</b> yönetim API'si basit bir CRUD. Asıl soru her istekte yapılan doğrulama: hızlı, güvenli ve iptale duyarlı.</p>
+<div class="say">The management API is simple CRUD. The real design question is verification on every request: we store only a hash, the gateway checks it against a short-lived cache, and a revoked key stops working within a minute.</div>
+<h2 id="api">2 · API sözleşmesi</h2>
+<div class="step-hint"><b>Playbook 2/5 · API sözleşmesi.</b> endpoint'ler → bir tam request/response → hatalar. Idempotency ve yetkiyi burada söyle.</div>
+<p class="small muted">Endpoint'e ya da hata koduna tıkla: altında istek ve cevap açılır. ↗ işaretli hücre ilgili karara götürür.</p>
+<div class="diagram" id="apiAK" data-all="Endpoint&#x27;ler → oluşturma → doğrulama → hatalar → kurallar.">
+  <div class="pills"></div>
+  <div class="api-sheet"><div class="stg" data-s="1" data-e="9"><p class="small" style="margin:0"><b>Kaynak:</b> api key. Key'in şekli: <code>sk_live_k7Qp2_9aFh…</code> = önek + key id + rastgele secret. Önek key'i tanıtır, secret doğrular.</p></div><div class="table-wrap"><table><tr class="stg" data-s="1" data-e="9"><th>Endpoint</th><th>Cevap</th><th>Ne yapar?</th></tr><tr class="stg" data-s="1" data-e="9"><td class="ex-toggle"><code>POST /v1/api-keys</code></td><td>201</td><td data-href="#k1">Oluştur; secret sadece bu cevapta.</td></tr><tr class="ex-row stg" data-s="1" data-e="9" hidden><td colspan="3"><div class="ex-label">İstek</div><pre>POST /v1/api-keys
+Authorization: Bearer &lt;admin JWT&gt;
+Idempotency-Key: 3e8a…
+{ "name": "ci-pipeline",
+  "scopes": ["tasks:write"],
+  "expires_at": "2027-06-01T00:00:00Z" }</pre><div class="ex-label">Cevap</div><pre>201 Created
+Location: /v1/api-keys/key_k7Qp2
+{ "id": "key_k7Qp2", "name": "ci-pipeline",
+  "key": "sk_live_k7Qp2_9aFhT3…",     ← sadece şimdi
+  "prefix": "sk_live_k7Qp2",
+  "scopes": ["tasks:write"],
+  "expires_at": "2027-06-01T00:00:00Z" }</pre><p class="small" style="margin:4px 0 0">Ayrıntısı 2. adımda: satır satır açıklama.</p></td></tr><tr class="stg" data-s="1" data-e="9"><td class="ex-toggle"><code>GET /v1/api-keys</code></td><td>200</td><td>Listele; secret yok.</td></tr><tr class="ex-row stg" data-s="1" data-e="9" hidden><td colspan="3"><div class="ex-label">İstek</div><pre>GET /v1/api-keys
+Authorization: Bearer &lt;admin JWT&gt;</pre><div class="ex-label">Cevap</div><pre>200 OK
+{ "data": [
+    { "id": "key_k7Qp2", "name": "ci-pipeline",
+      "prefix": "sk_live_k7Qp2", "scopes": ["tasks:write"],
+      "status": "active", "created_by": "user:ayse",
+      "last_used_at": "2026-11-24T09:10:00Z" } ] }</pre><p class="small" style="margin:4px 0 0">Önek, hangi key olduğunu tanımaya yeter; secret bir daha gösterilmez.</p></td></tr><tr class="stg" data-s="1" data-e="9"><td class="ex-toggle"><code>POST /v1/api-keys/{id}:rotate</code></td><td>201</td><td data-href="#k4">Yeni key; eskisi süre dolunca kapanır.</td></tr><tr class="ex-row stg" data-s="1" data-e="9" hidden><td colspan="3"><div class="ex-label">İstek</div><pre>POST /v1/api-keys/key_k7Qp2:rotate
+Authorization: Bearer &lt;admin JWT&gt;
+{ "grace_period_seconds": 86400 }</pre><div class="ex-label">Cevap</div><pre>201 Created
+{ "id": "key_m3Zt8", "key": "sk_live_m3Zt8_…",
+  "replaces": "key_k7Qp2",
+  "old_key_expires_at": "2026-11-25T09:30:00Z" }</pre><p class="small" style="margin:4px 0 0">24 saat boyunca iki key de çalışır; müşteri yenisine geçer.</p></td></tr><tr class="stg" data-s="1" data-e="9"><td class="ex-toggle"><code>DELETE /v1/api-keys/{id}</code></td><td>204</td><td data-href="#k3">İptal; en geç 60 sn'de her yerde.</td></tr><tr class="ex-row stg" data-s="1" data-e="9" hidden><td colspan="3"><div class="ex-label">İstek</div><pre>DELETE /v1/api-keys/key_k7Qp2
+Authorization: Bearer &lt;admin JWT&gt;</pre><div class="ex-label">Cevap</div><pre>204 No Content</pre><p class="small" style="margin:4px 0 0">Tekrar çağrılırsa yine 204: iptal idempotent.</p></td></tr></table></div><div class="stg" data-s="2" data-e="9"><p style="margin:0"><b>Akış:</b> admin oluşturur → API secret üretir, <b>sadece hash'ini</b> saklar → secret bir kez gösterilir. Aşağıda satır satır.</p></div><div class="table-wrap"><table><tr class="stg" data-s="2" data-e="9"><th style="width:45%">İstek</th><th>Ne demek, neden?</th></tr><tr class="stg" data-s="2" data-e="9"><td><code>POST /v1/api-keys</code></td><td>Yeni bir key oluştur.</td></tr><tr class="stg" data-s="2" data-e="9"><td><code>Authorization: Bearer &lt;admin JWT&gt;</code></td><td>Kim olduğun: tenant ve rol token'dan. Sadece <b>admin</b> key oluşturabilir; bir API key başka key oluşturamaz.</td></tr><tr class="stg" data-s="2" data-e="9"><td><code>Idempotency-Key: 3e8a…</code></td><td>Ağ koparsa tekrar gönderilir; ikinci bir key oluşmaz. Ama secret'ı saklamadığımız için tekrar gelen isteğe <b>secret'sız</b> aynı key döner (aşağıda karar k5).</td></tr><tr class="stg" data-s="2" data-e="9"><td><code>"scopes": ["tasks:write"]</code></td><td>Bu key ne yapabilir. En az yetki: CI'ın key'i sadece task oluşturabilsin.</td></tr><tr class="stg" data-s="2" data-e="9"><td><code>"expires_at": "2027-06-01…"</code></td><td>İsteğe bağlı son kullanma tarihi. Sonsuz key'ler en büyük risk.</td></tr></table></div><div class="table-wrap"><table><tr class="stg" data-s="2" data-e="9"><th style="width:45%">Cevap</th><th>Ne demek, neden?</th></tr><tr class="stg" data-s="2" data-e="9"><td><code>201 Created</code></td><td>Key hemen kullanılabilir. 202 değil, çünkü arka planda iş yok.</td></tr><tr class="stg" data-s="2" data-e="9"><td><code>"key": "sk_live_k7Qp2_9aFhT3…"</code></td><td>Secret'ın <b>tek</b> gösterimi. Biz sadece SHA-256 hash'ini saklıyoruz; kaybedilirse geri getirilemez.</td></tr><tr class="stg" data-s="2" data-e="9"><td><code>"prefix": "sk_live_k7Qp2"</code></td><td>Listede key'i tanımak için. <code>sk_live_</code> öneki, GitHub gibi tarayıcıların sızan key'i tanımasını da sağlar.</td></tr></table></div><div class="stg" data-s="3" data-e="9" data-href="#k2"><pre>Authorization: Bearer sk_live_k7Qp2_9aFhT3…
+
+1. önekten key id'yi ayır                → key_k7Qp2
+2. gateway'in belleğinde (60 sn) var mı? → yoksa Postgres'ten id ile oku
+3. sha256(secret) == secret_hash ?        (sabit zamanlı karşılaştırma)
+4. status active, süresi dolmamış, scope bu endpoint'e yetiyor mu?
+5. isteğe tenant'ı ekle (X-Tenant-Id: ten_42), backend'e ilet
+6. last_used_at'i arka planda, dakikada bir güncelle</pre></div><div class="stg" data-s="3" data-e="9" data-href="#k1"><p class="small" style="margin:0">SHA-256 yeter, bcrypt gerekmez: secret 256 bit rastgele bir değer, parola değil; kaba kuvvetle kırılamaz. bcrypt saniyede 50k istekte çok yavaş olurdu.</p></div><div class="stg" data-s="4" data-e="9"><p class="small" style="margin:0"><b>Tek hata formatı:</b> sabit <code>code</code>, <code>message</code>, <code>request_id</code>. 401 mesajı hep aynı: "yanlış", "iptal", "süresi dolmuş" ayrımı saldırgana bilgi verir.</p></div><div class="table-wrap"><table><tr class="stg" data-s="4" data-e="9"><th>Kod</th><th>Ne zaman?</th></tr><tr class="stg" data-s="4" data-e="9"><td class="ex-toggle">401 <code>INVALID_API_KEY</code></td><td data-href="#k8">Key yanlış, iptal edilmiş ya da süresi dolmuş; hepsi aynı cevap.</td></tr><tr class="ex-row stg" data-s="4" data-e="9" hidden><td colspan="2"><pre>401 Unauthorized
+{ "error": { "code": "INVALID_API_KEY",
+             "message": "The API key is invalid",
+             "request_id": "req_7b3…" } }</pre></td></tr><tr class="stg" data-s="4" data-e="9"><td class="ex-toggle">403 <code>INSUFFICIENT_SCOPE</code></td><td>Key geçerli ama bu endpoint için yetkisi yok.</td></tr><tr class="ex-row stg" data-s="4" data-e="9" hidden><td colspan="2"><pre>403 Forbidden
+{ "error": { "code": "INSUFFICIENT_SCOPE",
+             "message": "This key needs the tasks:write scope",
+             "request_id": "req_7b3…",
+             "details": { "required_scope": "tasks:write" } } }</pre></td></tr><tr class="stg" data-s="4" data-e="9"><td class="ex-toggle">400 <code>VALIDATION_FAILED</code></td><td>Bilinmeyen scope, geçmiş bir tarih.</td></tr><tr class="ex-row stg" data-s="4" data-e="9" hidden><td colspan="2"><pre>400 Bad Request
+{ "error": { "code": "VALIDATION_FAILED",
+             "message": "Unknown scope: tasks:admin",
+             "request_id": "req_7b3…",
+             "details": { "field": "scopes" } } }</pre></td></tr><tr class="stg" data-s="4" data-e="9"><td class="ex-toggle">409 <code>KEY_LIMIT_REACHED</code></td><td>Tenant başına 50 key sınırı.</td></tr><tr class="ex-row stg" data-s="4" data-e="9" hidden><td colspan="2"><pre>409 Conflict
+{ "error": { "code": "KEY_LIMIT_REACHED",
+             "message": "This tenant already has 50 active keys",
+             "request_id": "req_7b3…" } }</pre></td></tr><tr class="stg" data-s="4" data-e="9"><td class="ex-toggle">404 <code>NOT_FOUND</code></td><td>Key yok ya da başka tenant'ın.</td></tr><tr class="ex-row stg" data-s="4" data-e="9" hidden><td colspan="2"><pre>404 Not Found
+{ "error": { "code": "NOT_FOUND",
+             "message": "API key not found",
+             "request_id": "req_7b3…" } }</pre></td></tr></table></div><div class="table-wrap"><table><tr class="stg" data-s="5" data-e="9"><th>Kural</th><th>Karar</th></tr><tr class="stg" data-s="5" data-e="9" data-href="#k1"><td>Saklama</td><td>Sadece SHA-256 hash; düz metin hiçbir yerde, log'lar dahil.</td></tr><tr class="stg" data-s="5" data-e="9" data-href="#k5"><td>Gösterim</td><td>Secret bir kez gösterilir; tekrar gelen istekte bile.</td></tr><tr class="stg" data-s="5" data-e="9" data-href="#k3"><td>İptal</td><td>En geç 60 sn'de her gateway'de (cache süresi).</td></tr><tr class="stg" data-s="5" data-e="9" data-href="#k4"><td>Rotation</td><td>Yeni key + eskisi için süre; iki key birlikte geçerli.</td></tr></table></div></div>
+  <div class="stage-text"><div class="t"></div><div class="d"></div></div>
+  <div class="btns"><button class="btn" type="button" data-act="prev">← Önceki</button><button class="btn" type="button" data-act="next">Sonraki →</button><button class="btn" type="button" data-act="all">Hepsi</button></div>
+</div>
+<div class="say">We show the secret once, store only its hash, and verify every request at the gateway against a short-lived cache, so revocation takes effect within a minute.</div>
+<h2 id="cozum">3 · Minimum çözüm</h2>
+<div class="step-hint"><b>Playbook 3/5 · Minimum çözüm.</b> minimum tablolar ve akış. Çiz, sonra dur ve sor.</div>
+<div class="dm"><div class="dm-card"><div class="dm-kind">Postgres</div><pre><b>api_keys</b>
+  id: key_k7Qp2
+  tenant_id: ten_42
+  name: ci-pipeline
+  prefix: sk_live_k7Qp2
+  secret_hash: sha256:4be1…
+  scopes: [tasks:write]
+  status: active
+  expires_at: 2027-06-01
+  created_by: user:ayse
+  last_used_at: 2026-11-24T09:10:00Z
+  replaced_by: null</pre></div><div class="dm-card"><div class="dm-kind">Gateway belleği</div><pre><b>key_k7Qp2</b>
+  secret_hash: sha256:4be1…
+  tenant_id: ten_42
+  scopes: [tasks:write]
+  status: active
+  cached_at: 09:12:00   ← 60 sn</pre></div></div>
+<div class="diagram" id="diagAK" data-glossary="#" data-all="Üstte yönetim yolu, altta her istekteki doğrulama.">
+  <div class="pills"></div>
+  <svg class="arch" viewBox="0 0 1050 410" role="img" aria-labelledby="diagAK-t diagAK-d"><title id="diagAK-t">API key yönetimi</title><desc id="diagAK-d">Admin, gateway, Keys API, Postgres, key cache, API istemcisi ve public API; üç aşamada eklenir.</desc><defs>
+<marker id="diagAKm1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#AFA9EC" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<marker id="diagAKm2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#5DCAA5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<marker id="diagAKm3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#F0997B" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<marker id="diagAKm4" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#EF9F27" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<marker id="diagAKm5" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#ED93B1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+</defs>
+<g class="c-purple stg" data-s="1" data-e="9"><rect x="20" y="40" width="100" height="56" rx="6" stroke-width="0.6"/><text class="th" x="70" y="59" text-anchor="middle" dominant-baseline="central">Admin</text><text class="ts" x="70" y="77" text-anchor="middle" dominant-baseline="central">panel / API</text></g>
+<g class="c-purple stg" data-s="1" data-e="9" data-term="gateway"><rect x="220" y="40" width="100" height="336" rx="6" stroke-width="0.6"/><text class="th" x="270" y="199" text-anchor="middle" dominant-baseline="central">Gateway</text><text class="ts" x="270" y="217" text-anchor="middle" dominant-baseline="central">verify key</text></g>
+<g class="c-purple stg" data-s="1" data-e="9" data-term="keys-api"><rect x="420" y="40" width="140" height="56" rx="6" stroke-width="0.6"/><text class="th" x="490" y="59" text-anchor="middle" dominant-baseline="central">Keys API</text><text class="ts" x="490" y="77" text-anchor="middle" dominant-baseline="central">create, revoke</text></g>
+<g class="c-purple stg" data-s="1" data-e="9" data-term="postgres"><rect x="660" y="40" width="150" height="56" rx="6" stroke-width="0.6"/><text class="th" x="735" y="59" text-anchor="middle" dominant-baseline="central">Postgres</text><text class="ts" x="735" y="77" text-anchor="middle" dominant-baseline="central">api_keys (hash)</text></g>
+<g class="c-teal stg" data-s="2" data-e="9" data-term="key-cache"><rect x="420" y="180" width="140" height="56" rx="6" stroke-width="0.6"/><text class="th" x="490" y="199" text-anchor="middle" dominant-baseline="central">Key cache</text><text class="ts" x="490" y="217" text-anchor="middle" dominant-baseline="central">per gateway, 60 s</text></g>
+<g class="c-teal stg" data-s="2" data-e="9"><rect x="20" y="320" width="100" height="56" rx="6" stroke-width="0.6"/><text class="th" x="70" y="339" text-anchor="middle" dominant-baseline="central">API client</text><text class="ts" x="70" y="357" text-anchor="middle" dominant-baseline="central">sk_live_…</text></g>
+<g class="c-teal stg" data-s="2" data-e="9"><rect x="420" y="320" width="140" height="56" rx="6" stroke-width="0.6"/><text class="th" x="490" y="339" text-anchor="middle" dominant-baseline="central">Public API</text><text class="ts" x="490" y="357" text-anchor="middle" dominant-baseline="central">tenant from key</text></g>
+<g class="stg" data-s="1" data-e="9"><path d="M120 60 L218 60" stroke="#AFA9EC" stroke-width="1.6" fill="none" marker-end="url(#diagAKm1)"/><text class="al" x="170" y="52" text-anchor="middle" fill="#AFA9EC">1 · POST</text></g>
+<g class="stg" data-s="1" data-e="9"><path d="M320 60 L418 60" stroke="#AFA9EC" stroke-width="1.6" fill="none" marker-end="url(#diagAKm1)"/><text class="al" x="370" y="52" text-anchor="middle" fill="#AFA9EC">2 · auth</text></g>
+<g class="stg" data-s="1" data-e="9"><path d="M560 68 L658 68" stroke="#AFA9EC" stroke-width="1.6" fill="none" marker-end="url(#diagAKm1)"/><text class="al" x="610" y="60" text-anchor="middle" fill="#AFA9EC">3 · INSERT</text></g>
+<g class="stg" data-s="2" data-e="9"><path d="M120 348 L218 348" stroke="#5DCAA5" stroke-width="1.6" fill="none" marker-end="url(#diagAKm2)"/><text class="al" x="170" y="340" text-anchor="middle" fill="#5DCAA5">4 · Bearer</text></g>
+<g class="stg" data-s="2" data-e="9"><path d="M320 208 L418 208" stroke="#5DCAA5" stroke-width="1.6" fill="none" marker-end="url(#diagAKm2)"/><text class="al" x="370" y="200" text-anchor="middle" fill="#5DCAA5">5 · lookup</text></g>
+<g class="stg" data-s="2" data-e="9"><path d="M560 208 L735 208 L735 98" stroke="#5DCAA5" stroke-width="1.6" fill="none" marker-end="url(#diagAKm2)"/><text class="al" x="742" y="150" text-anchor="start" fill="#5DCAA5">6 · miss</text></g>
+<g class="stg" data-s="2" data-e="9"><path d="M320 348 L418 348" stroke="#5DCAA5" stroke-width="1.6" fill="none" marker-end="url(#diagAKm2)"/><text class="al" x="370" y="340" text-anchor="middle" fill="#5DCAA5">7 · forward</text></g>
+<g class="stg" data-s="3" data-e="9"><path d="M490 96 L490 178" stroke="#F0997B" stroke-width="1.6" fill="none" stroke-dasharray="5 4" marker-end="url(#diagAKm3)"/><text class="al" x="497" y="142" text-anchor="start" fill="#F0997B">8 · evict</text></g>
+</svg>
+  <div class="stage-text"><div class="t"></div><div class="d"></div></div>
+  <div class="btns"><button class="btn" type="button" data-act="prev">← Önceki</button><button class="btn" type="button" data-act="next">Sonraki →</button><button class="btn" type="button" data-act="all">Hepsi</button></div>
+</div>
+<details class="note arrows" open><summary><b>Okların açıklaması</b></summary><div class="table-wrap"><table><tr><th>No</th><th>Nereden → nereye</th><th>Ne yapar?</th></tr><tr><td style="white-space:nowrap"><span class="dot" style="background:#AFA9EC"></span><b>1</b></td><td style="white-space:nowrap">Admin → Gateway</td><td><code>POST /v1/api-keys</code> admin JWT'si ile.</td></tr><tr><td style="white-space:nowrap"><span class="dot" style="background:#AFA9EC"></span><b>2</b></td><td style="white-space:nowrap">Gateway → Keys API</td><td>JWT doğrulandı; admin rolü var mı?</td></tr><tr><td style="white-space:nowrap"><span class="dot" style="background:#AFA9EC"></span><b>3</b></td><td style="white-space:nowrap">Keys API → Postgres</td><td>Secret üretilir, <b>sadece hash'i</b> yazılır; secret bir kez cevapta döner.</td></tr><tr><td style="white-space:nowrap"><span class="dot" style="background:#5DCAA5"></span><b>4</b></td><td style="white-space:nowrap">API client → Gateway</td><td><code>Authorization: Bearer sk_live_k7Qp2_…</code></td></tr><tr><td style="white-space:nowrap"><span class="dot" style="background:#5DCAA5"></span><b>5</b></td><td style="white-space:nowrap">Gateway → Key cache</td><td>Önekten key id; gateway'in belleğinde var mı?</td></tr><tr><td style="white-space:nowrap"><span class="dot" style="background:#5DCAA5"></span><b>6</b></td><td style="white-space:nowrap">Key cache → Postgres</td><td>Bellekte yoksa id ile tek satır okunur (PK); 60 sn tutulur.</td></tr><tr><td style="white-space:nowrap"><span class="dot" style="background:#5DCAA5"></span><b>7</b></td><td style="white-space:nowrap">Gateway → Public API</td><td>Hash ve scope tamamsa istek tenant bilgisiyle iletilir.</td></tr><tr><td style="white-space:nowrap"><span class="dot" style="background:#F0997B"></span><b>8</b></td><td style="white-space:nowrap">Keys API → Key cache</td><td>Follow-up: iptal anında Redis pub/sub ile her gateway'in belleğinden silinir; 60 sn beklenmez.</td></tr></table></div></details>
+<div class="say">This is the simplest version that works: we store only a hash, the gateway checks keys against a 60-second cache backed by Postgres, and revocation shows up within a minute. Where would you like me to go deeper?</div>
+<h2 id="hata">4 · Hata ve güvenlik</h2>
+<div class="step-hint"><b>Playbook 4/5 · Hata ve güvenlik.</b> her cevap: karar → gerekçe → bedel.</div>
+<div class="table-wrap"><table><tr><th>Soru</th><th>Karar</th><th>Gerekçe</th><th>Bedel / alternatif</th></tr><tr id="k1"><td><b>How do you store the secret?</b></td><td>Sadece SHA-256 hash'i; düz metin hiçbir yerde (log'lar dahil). Secret bir kez gösterilir.</td><td>Veritabanı sızarsa key'ler kullanılamaz.</td><td>Kaybedilen key geri getirilemez; yenisi oluşturulur. bcrypt gerekmez: secret rastgele ve uzun.</td></tr><tr id="k2"><td><b>How is verification fast on every request?</b></td><td>Önekten key id → gateway belleği (60 sn) → yoksa Postgres'te tek satır (PK). Hash sabit zamanlı karşılaştırılır.</td><td>Saniyede 50k istek; her biri veritabanına gidemez.</td><td>İptal 60 sn gecikebilir.</td></tr><tr id="k3"><td><b>How fast does revocation take effect?</b></td><td>Minimum: bellek süresi kadar, en geç 60 sn. Daha hızlı gerekirse iptal olayı pub/sub ile her gateway'e gider ve bellekten silinir.</td><td>Sızan key bir dakikadan uzun çalışmamalı.</td><td>Süreyi kısaltmak veritabanı yükünü artırır; pub/sub bir parça daha.</td></tr><tr id="k4"><td><b>How do you rotate without downtime?</b></td><td><code>:rotate</code> yeni key oluşturur; eskisi süre boyunca (ör. 24 saat) çalışır, sonra kendiliğinden kapanır.</td><td>Müşteri yeni key'i deploy edene kadar istekleri kesilmemeli.</td><td>Bir süre iki key birlikte geçerli (risk penceresi).</td></tr><tr id="k5"><td><b>What if the create request is retried?</b></td><td><code>Idempotency-Key</code> ile ikinci key oluşmaz; ama aynı key secret'sız döner. Müşteri secret'ı kaybettiyse key'i iptal edip yenisini oluşturur.</td><td>Secret'ı saklamıyoruz; ikinci kez gösteremeyiz.</td><td>Nadiren yeni key oluşturmak gerekir.</td></tr><tr id="k6"><td><b>Who may manage keys?</b></td><td>Tenant admin rolü; bir API key başka key oluşturamaz; her işlem audit log'da.</td><td>Sızan bir key kendine yeni key'ler üretip kalıcı hale gelmemeli.</td><td>Basit bir rol modeli.</td></tr><tr id="k7"><td><b>How do you detect a leaked key?</b></td><td><code>sk_live_</code> öneki sayesinde GitHub gibi tarayıcılar sızan key'i tanır ve bize bildirir → otomatik iptal + e-posta. 401 oranındaki ani artışa alarm.</td><td>Key'ler kod depolarına sızar; hızlı fark etmek gerek.</td><td>Tarayıcı entegrasyonu.</td></tr><tr id="k8"><td><b>Why is every 401 the same?</b></td><td>"Yanlış", "iptal", "süresi dolmuş" ayrımı sadece müşterinin kendi panelinde ve log'larda; API cevabı hep aynı.</td><td>Saldırgan hangi key'lerin bir zamanlar geçerli olduğunu öğrenmemeli.</td><td>Müşterinin hata ayıklaması biraz zorlaşır; panelde <code>last_used_at</code> ve durum yardım eder.</td></tr><tr id="k9"><td><b>How do we know it's healthy?</b></td><td>Doğrulama gecikmesi (p99), bellek isabet oranı, 401 oranı (ani artış = sızıntı ya da saldırı), iptalin yayılma süresi.</td><td>Doğrulama her isteğin önünde; yavaşlarsa her şey yavaşlar.</td><td>Metrikler gateway'den gelmeli.</td></tr></table></div>
+<h2 id="olcek">5 · Ölçek ve follow-up</h2>
+<div class="step-hint"><b>Playbook 5/5 · Ölçek ve follow-up.</b> önce darboğazı adlandır, sonra parçayı ekle.</div>
+<p class="small muted">Önce soruyu oku, 20 saniyede kendi cevabını sesli söyle, sonra aç.</p>
+<details class="term qa"><summary><b>1.</b> Revocation must be instant.</summary>
+<p class="small muted" style="margin:8px 0 4px">Ana fikir: Pub/sub ile anında bellekten silme (3. aşama); ek olarak kısa süreli "iptal edildi" kaydı.</p>
+<div class="say">When a key is revoked, the Keys API publishes an event and every gateway drops it from its cache right away. The 60-second expiry stays as a safety net in case a message is lost.</div>
+</details>
+<details class="term qa"><summary><b>2.</b> Postgres is down. Can requests still be authenticated?</summary>
+<p class="small muted" style="margin:8px 0 4px">Ana fikir: Bellekteki key'ler çalışmaya devam eder (stale-if-error); bilinmeyen key reddedilir.</p>
+<div class="say">Keys already in the gateway cache keep working for a while even if Postgres is down, and unknown keys are rejected. That's fail-open for known keys and fail-closed for unknown ones, a trade-off I'd say explicitly.</div>
+</details>
+<details class="term qa"><summary><b>3.</b> Why not JWTs instead of API keys?</summary>
+<p class="small muted" style="margin:8px 0 4px">Ana fikir: JWT kısa ömürlü ve iptali zor; API key uzun ömürlü ve iptal edilebilir. İkisi birlikte: key ile kısa ömürlü token alınır (OAuth client credentials).</p>
+<div class="say">JWTs are short-lived and hard to revoke, API keys are long-lived and revocable. For high traffic I can combine them: the client exchanges the key for a short-lived token, OAuth client-credentials style.</div>
+</details>
+<details class="term qa"><summary><b>4.</b> Each key needs its own rate limit.</summary>
+<p class="small muted" style="margin:8px 0 4px">Ana fikir: Gateway'de key id başına token bucket (Redis).</p>
+<div class="say">The gateway already knows the key id, so I add a token bucket per key in Redis, on top of the per-tenant limit.</div>
+</details>
+<h2 id="parcalar">Parçalar</h2>
+<p class="small muted">Diyagramdaki kutuya tıklayınca buraya gelirsin: her parça için hangi problemi çözdüğü, neden şimdi gerektiği ve daha basit alternatifi.</p>
+<section class="term" id="p-gateway"><h3>Gateway <a class="anchor" href="#p-gateway">#</a></h3><p>Her istekte key'i doğrular: önek, bellek, hash, durum, scope. Yönetim isteklerinde de admin JWT'sini doğrular.</p><div class="decide"><div><b>Hangi problemi çözüyor?</b> Doğrulamayı her serviste tekrar yazmamak; tek yerde, hızlı.</div><div><b>Neden şimdi?</b> 1. aşama.</div><div><b>Daha basit alternatif:</b> Her servisin key'i kendisinin doğrulaması.</div><div><b>Bedeli:</b> Kritik yolda; yavaşlarsa her şey yavaşlar.</div></div></section>
+<section class="term" id="p-keys-api"><h3>Keys API <a class="anchor" href="#p-keys-api">#</a></h3><p>Key oluşturur, listeler, döndürür, iptal eder. Secret'ı üretir, sadece hash'ini yazar.</p><div class="decide"><div><b>Hangi problemi çözüyor?</b> Key yaşam döngüsünü tek yerde ve audit'li yönetmek.</div><div><b>Neden şimdi?</b> 1. aşama.</div><div><b>Daha basit alternatif:</b> Panelin doğrudan veritabanına yazması.</div><div><b>Bedeli:</b> Bir servis daha.</div></div></section>
+<section class="term" id="p-postgres"><h3>Postgres <a class="anchor" href="#p-postgres">#</a></h3><p><code>api_keys</code> tablosu: hash, tenant, scope, durum, son kullanım.</p><div class="decide"><div><b>Hangi problemi çözüyor?</b> Kalıcı ve doğru durum; id ile hızlı okuma.</div><div><b>Neden şimdi?</b> 1. aşama.</div><div><b>Daha basit alternatif:</b> Bu zaten en basit seçenek.</div><div><b>Bedeli:</b> Okuma yükünü bellek karşılıyor.</div></div></section>
+<section class="term" id="p-key-cache"><h3>Key cache (gateway belleği) <a class="anchor" href="#p-key-cache">#</a></h3><p>Her gateway pod'unda, key id → hash, tenant, scope; 60 sn tutulur.</p><div class="decide"><div><b>Hangi problemi çözüyor?</b> Saniyede 50k doğrulamanın veritabanına gitmemesi.</div><div><b>Neden şimdi?</b> 2. aşama.</div><div><b>Daha basit alternatif:</b> Her istekte Postgres'e gitmek.</div><div><b>Bedeli:</b> İptal 60 sn gecikebilir; follow-up'ta pub/sub ile anında silinir.</div></div></section>
+<nav class="pager"><a href="../index.html">← Ana sayfa</a><a href="diger.html">Diğer sorular: ne değişir? →</a></nav>
+</main>
+<footer>Kişisel çalışma notları. Senaryolar alıştırma amaçlıdır; şirket adları anonimleştirilmiştir.</footer>
+<script>initStepper("apiAK", [{"n": "1 · Endpoint'ler", "c": "#AFA9EC", "d": "Yönetim tarafı: oluştur, listele, döndür, iptal."}, {"n": "2 · Tek tam istek", "c": "#5DCAA5", "d": "Key oluşturma: secret neden bir kez gösterilir, neden sadece hash saklanır?"}, {"n": "3 · Doğrulama", "c": "#F0997B", "d": "Her istekte ne olur: önek, cache, hash karşılaştırma, scope."}, {"n": "4 · Hatalar", "c": "#EF9F27", "d": "Tek hata formatı; 401 neden hep aynı?"}, {"n": "5 · Kurallar", "c": "#ED93B1", "d": "Dört kural, tek cümleyle."}]);</script><script>initStepper("diagAK", [{"n": "1 · Yönetim", "c": "#AFA9EC", "d": "Admin key oluşturur (ok 1–2). Keys API secret'ı üretir, sadece hash'ini Postgres'e yazar (ok 3) ve secret'ı bir kez gösterir."}, {"n": "2 · Her istekte doğrulama", "c": "#5DCAA5", "d": "İstemci key'le gelir (ok 4). Gateway önekten id'yi alır, belleğe bakar (ok 5), yoksa Postgres'ten okur (ok 6). Hash, durum ve scope tamamsa isteği tenant bilgisiyle iletir (ok 7). İptal en geç 60 sn'de (bellek süresi) yansır."}, {"n": "3 · Follow-up: anında iptal", "c": "#F0997B", "d": "<b>Sorulursa ekle</b>, ör. \"iptal hemen yansımalı\". Keys API iptal edince Redis pub/sub ile her gateway'in belleğinden siler (ok 8)."}]);</script>
+</body>
+</html>

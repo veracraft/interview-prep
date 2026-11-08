@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Diğer sorular: neyi farklı yapardın?</title>
+<link rel="stylesheet" href="../assets/site.css?v=12">
+<script src="../assets/diagrams.js?v=12"></script>
+<style>
+details.qa { padding: 10px 16px; }
+details.qa summary { cursor: pointer; font-size: 16.5px; }
+details.qa[open] summary { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="topbar-inner">
+  <a class="brand" href="../index.html">Mülakat Hazırlığı</a>
+  <nav>
+    <a href="../index.html">Ana sayfa</a>
+    <a href="../knowledge-sync/kapsam.html">Knowledge Sync</a>
+    <a href="../agent-tasks/kapsam.html">Agent Tasks</a>
+    <a href="../deployment-api/kapsam.html">Deployment API</a>
+    <a class="active" href="feature-flags.html">Basit sorular</a>
+  </nav>
+</div>
+<div class="subnav"><nav>
+    <a href="feature-flags.html">Feature flags (okuma)</a>
+    <a href="usage.html">Usage metering (yazma)</a>
+    <a href="api-keys.html">API key yönetimi</a>
+    <a class="active" href="diger.html">Diğer sorular: ne değişir?</a>
+</nav></div></header>
+
+<main class="wide">
+<h1>Diğer sorular: neyi farklı yapardın?</h1>
+<p class="lead">Seçmediğin yedi soru. Her biri hazırladığın en yakın soruyla karşılaştırılıyor: ne aynı kalıyor, ne değişiyor, API taslağı, tuzak ve açılış cümlesi. Başlığa dokun, açılsın.</p>
+<div class="note small"><b>Genel kural:</b> playbook aynı (kapsam → API → minimum çözüm → hata → ölçek). Değişen, <b>darboğazın nerede olduğu</b>: okuma ağırlıklıda cache ve tutarlılık; yazma ağırlıklıda kabul, tekrar ve toplama; dışarıya yazanda karşı tarafın hataları.</div>
+<nav class="toc"><b>Bu sayfada</b><ol>
+<li><a href="#okuma">Okuma ağırlıklı</a>: model kataloğu, URL kısaltıcı</li>
+<li><a href="#yazma">Yazma ağırlıklı</a>: audit log, geri bildirim</li>
+<li><a href="#diger">Diğer</a>: webhook teslimi, rate limiter, dosya yükleme</li>
+</ol></nav>
+<h2 id="okuma">Okuma ağırlıklı (en yakını: feature flag)</h2>
+<details class="term qa" id="model-katalog"><summary><b>Model kataloğu API'si</b> <span class="muted small">· en yakını: Feature flag servisi</span></summary>
+<div class="say">Design the API that lists available models, their prices and limits.</div>
+<p class="small">Hazırladığın en yakın soru: <a href="feature-flags.html">Feature flag servisi</a>. Oradaki akışı kullan; aşağıdakileri değiştir.</p>
+<div class="table-wrap"><table>
+<tr><th style="width:30%">Aynı kalan</th><td>Okuma ağırlıklı; cache + ETag; yazma nadir ve sürümlü.</td></tr>
+<tr><th>Farklı yapacakların</th><td><ul style="margin:0"><li>Okuyan iç servisler değil, <b>herkes</b> (müşteriler, SDK'lar, doküman sitesi). SDK'da kopya yerine <b>HTTP cache</b>: CDN + <code>Cache-Control: public, max-age=300</code> + ETag.</li><li><b>Ortak ve kişiye özel veriyi ayır:</b> katalog herkese aynı (CDN'de cache'lenir); tenant'a özel fiyat ve limit ayrı endpoint'te, <code>Cache-Control: private, no-store</code>.</li><li>Fiyat değişikliği ileri tarihli: <code>effective_from</code>. Cache'teki eski fiyat fatura hatası yaratmaz, çünkü fatura sunucuda hesaplanır; bunu söyle.</li><li>Model emekliliği: <code>deprecated_at</code>, <code>Sunset</code> header'ı; istemcilere önceden haber.</li></ul></td></tr>
+<tr><th>Tuzak</th><td>Kişiye özel cevabı CDN'e cache'letmek: bir müşteri başka müşterinin limitini görür.</td></tr>
+</table></div>
+<div class="ex-label">API taslağı</div>
+<pre>GET /v1/models                 → public, CDN
+GET /v1/models/{id}
+GET /v1/me/limits               → private, tenant'a özel
+PUT /v1/models/{id}             → iç, nadir (If-Match)</pre>
+<div class="say">This is read-heavy and mostly public, so I'll lean on HTTP caching: a CDN with ETags for the shared catalog, and a separate private endpoint for tenant-specific prices and limits.</div>
+</details><details class="term qa" id="url-kisaltici"><summary><b>URL kısaltıcı</b> <span class="muted small">· en yakını: Feature flag servisi</span></summary>
+<div class="say">Design a URL shortener.</div>
+<p class="small">Hazırladığın en yakın soru: <a href="feature-flags.html">Feature flag servisi</a>. Oradaki akışı kullan; aşağıdakileri değiştir.</p>
+<div class="table-wrap"><table>
+<tr><th style="width:30%">Aynı kalan</th><td>Okuma ağırlıklı; sıcak okuma yolu cache'ten.</td></tr>
+<tr><th>Farklı yapacakların</th><td><ul style="margin:0"><li><b>Kod üretimi asıl soru:</b> rastgele 7 karakter base62 (≈3,5 trilyon ihtimal) + unique index; çakışırsa yeniden üret. Sıralı sayaç tahmin edilebilir: herkes tüm linkleri gezebilir.</li><li><b>Yönlendirme milisaniyeler içinde:</b> <code>GET /{code}</code> → kod → URL cache'ten (Redis ya da CDN).</li><li><b>301 mi 302 mi:</b> 301'i tarayıcı kalıcı cache'ler, sonraki tıklamaları göremezsin; istatistik isteniyorsa 302.</li><li><b>Tıklama sayımı ayrı, yazma ağırlıklı bir yol:</b> olay kuyruğa asenkron; yönlendirmeyi bekletmez (usage metering'e benzer).</li><li>Kötüye kullanım: zararlı URL taraması, link oluşturmada rate limit.</li></ul></td></tr>
+<tr><th>Tuzak</th><td>Sıralı kod (enumeration); 301 yüzünden istatistiğin kaybolması.</td></tr>
+</table></div>
+<div class="ex-label">API taslağı</div>
+<pre>POST   /v1/links        { url, custom_alias?, expires_at? } → 201 { code }
+GET    /{code}          → 302 Location: &lt;url&gt;
+GET    /v1/links/{code}/stats
+DELETE /v1/links/{code}</pre>
+<div class="say">There are two separate paths: a small write path that generates a unique random code, and a hot read path that must redirect in a few milliseconds from cache. Click counting goes async so it never slows the redirect.</div>
+</details>
+<h2 id="yazma">Yazma ağırlıklı (en yakını: usage metering)</h2>
+<details class="term qa" id="audit-log"><summary><b>Audit log</b> <span class="muted small">· en yakını: Usage metering</span></summary>
+<div class="say">Design an audit log that our services write to and enterprise customers can query and export.</div>
+<p class="small">Hazırladığın en yakın soru: <a href="usage.html">Usage metering</a>. Oradaki akışı kullan; aşağıdakileri değiştir.</p>
+<div class="table-wrap"><table>
+<tr><th style="width:30%">Aynı kalan</th><td>Yüksek yazma; toplu gönderim; Kafka; ana isteği yavaşlatmamak; <code>event_id</code> ile tekrar yok; sütun tabanlı, gün bazında bölümlü depo.</td></tr>
+<tr><th>Farklı yapacakların</th><td><ul style="margin:0"><li><b>Toplama yok:</b> her olay tek tek önemli ve <b>değiştirilemez</b>. Silme ve güncelleme endpoint'i yok; append-only depo, gerekirse hash zinciri ya da WORM bucket.</li><li><b>Kaybetmek kabul edilemez:</b> olay, eylemle <b>aynı transaction'da</b> <code>pending_events</code>'e yazılır (usage'da gateway tamponu yeterliydi).</li><li><b>Okuma filtreli:</b> actor, action, zaman aralığı + cursor. Büyük dışa aktarma async: 202 + export işi + indirme linki.</li><li><b>Saklama tenant ayarı</b> (1–7 yıl); kişisel veriyi azalt ya da maskele (GDPR ile çatışmasın).</li><li>Sadece tenant admin ve denetçi okur; audit log'u okumak da audit'lenir.</li></ul></td></tr>
+<tr><th>Tuzak</th><td>Audit'i ana isteğin içinde senkron yazmak (yavaşlatır) ya da "gönder ve unut" (kaybolur). Doğrusu: aynı transaction'da pending_events.</td></tr>
+</table></div>
+<div class="ex-label">API taslağı</div>
+<pre>POST /v1/audit-events:batch                   → iç servisler
+GET  /v1/audit-events?actor=&amp;action=&amp;from=&amp;to=&amp;cursor=
+POST /v1/audit-exports  { from, to, format } → 202
+GET  /v1/audit-exports/{id}                    → durum + indirme linki</pre>
+<div class="say">Audit events are write-heavy like usage, but there's no aggregation: every event matters and must be immutable. I'll write them through pending_events in the same transaction as the action, keep append-only storage, and make exports async.</div>
+</details><details class="term qa" id="geri-bildirim"><summary><b>Geri bildirim (👍/👎)</b> <span class="muted small">· en yakını: Usage metering</span></summary>
+<div class="say">Users can rate an agent's answer with thumbs up or down and an optional comment. Design the API.</div>
+<p class="small">Hazırladığın en yakın soru: <a href="usage.html">Usage metering</a>. Oradaki akışı kullan; aşağıdakileri değiştir.</p>
+<div class="table-wrap"><table>
+<tr><th style="width:30%">Aynı kalan</th><td>Yazma odaklı; tenant izolasyonu.</td></tr>
+<tr><th>Farklı yapacakların</th><td><ul style="margin:0"><li><b>Hacim küçük:</b> Kafka, ham depo, aggregator gerekmez. Tek Postgres tablosu.</li><li><b>Doğal idempotency:</b> <code>PUT /v1/messages/{id}/feedback</code>; kullanıcı + mesaj başına tek kayıt. Fikir değiştirirse üzerine yazar, <code>DELETE</code> ile geri alır. <code>Idempotency-Key</code> gereksiz.</li><li>Analiz için günlük toplam: gece çalışan bir sorgu ya da materialized view.</li><li>Yorum metni kişisel veri içerebilir: saklama süresi ve erişim.</li></ul></td></tr>
+<tr><th>Tuzak</th><td>Basit soruya Kafka ve Redis eklemek: "neden?" sorusuna cevap veremezsin.</td></tr>
+</table></div>
+<div class="ex-label">API taslağı</div>
+<pre>PUT    /v1/messages/{id}/feedback  { rating: "up" | "down", comment? } → 200
+DELETE /v1/messages/{id}/feedback  → 204
+GET    /v1/feedback/summary?agent_id=&amp;from=&amp;to=</pre>
+<div class="say">This is small, so I'll keep it simple: one table, and PUT on the message's feedback gives me idempotency for free. A user can change their mind by overwriting it.</div>
+</details>
+<h2 id="diger">Diğer (en yakını: API key yönetimi)</h2>
+<details class="term qa" id="webhook"><summary><b>Webhook teslim servisi</b> <span class="muted small">· en yakını: API key yönetimi</span></summary>
+<div class="say">Customers register URLs and we send them events. Design it.</div>
+<p class="small">Hazırladığın en yakın soru: <a href="api-keys.html">API key yönetimi</a>. Oradaki akışı kullan; aşağıdakileri değiştir.</p>
+<div class="table-wrap"><table>
+<tr><th style="width:30%">Aynı kalan</th><td>Secret bir kez gösterilir ve rotate'te bir süre iki secret birlikte geçerli (API key'lerdeki gibi).</td></tr>
+<tr><th>Farklı yapacakların</th><td><ul style="margin:0"><li><b>Kontrol etmediğin sunuculara yazıyorsun:</b> müşteri sunucusu yavaş ya da kapalı olabilir. Teslim en az bir kez (at-least-once); alıcı <code>event_id</code> ile tekilleştirir, bunu dokümante et.</li><li><b>Retry:</b> üstel bekleme + jitter, ~24 saat; sonra dead-letter, endpoint'i kapat ve müşteriye e-posta.</li><li><b>Bir müşteri diğerlerini bekletmesin:</b> endpoint başına eşzamanlılık sınırı ve circuit breaker; timeout 10 sn.</li><li><b>Güvenlik:</b> HMAC imza + zaman damgası (replay'e karşı); iç IP'lere gönderme yok (SSRF).</li><li>Sıra garanti değil; gerekiyorsa olayda sıra numarası.</li></ul></td></tr>
+<tr><th>Tuzak</th><td>Tek ortak kuyrukta yavaş bir müşterinin herkesi tıkaması; imzasız webhook; iç ağa istek atılması.</td></tr>
+</table></div>
+<div class="ex-label">API taslağı</div>
+<pre>POST /v1/webhooks                   { url, events[] } → 201 { id, secret }   (secret bir kez)
+GET  /v1/webhooks/{id}/deliveries?cursor=
+POST /v1/deliveries/{id}:retry
+POST /v1/webhooks/{id}:rotate-secret</pre>
+<div class="say">We send events to servers we don't control, so I design for them being slow or down: at-least-once delivery with backoff, per-endpoint isolation so one bad customer can't block others, and signed payloads.</div>
+</details><details class="term qa" id="rate-limiter"><summary><b>Rate limiter</b> <span class="muted small">· en yakını: API key yönetimi</span></summary>
+<div class="say">Design rate limiting for our public API.</div>
+<p class="small">Hazırladığın en yakın soru: <a href="api-keys.html">API key yönetimi</a>. Oradaki akışı kullan; aşağıdakileri değiştir.</p>
+<div class="table-wrap"><table>
+<tr><th style="width:30%">Aynı kalan</th><td>Gateway'de, key ve tenant bazında; Redis'te ortak sayaç (API key sayfasındaki follow-up).</td></tr>
+<tr><th>Farklı yapacakların</th><td><ul style="margin:0"><li><b>API değil algoritma ve yerleşim sorusu.</b> Token bucket öner: kısa ani yüke izin verir, ortalamayı sınırlar. Sabit pencere kenarlarda iki kat geçirir; kayan pencere doğru ama pahalı.</li><li><b>Dağıtık sayaç:</b> Redis'te atomik (Lua) bir işlem; ya da pod başına yerel limit (limit / pod sayısı): yaklaşık ama Redis'siz.</li><li><b>Redis çökerse:</b> genel limitlerde fail open (yerel limite düş), çünkü limiter yüzünden bütün API düşmemeli; giriş denemesi gibi güvenlik limitlerinde fail closed.</li><li><b>Cevap:</b> 429 + <code>Retry-After</code> + <code>RateLimit-Limit/Remaining/Reset</code> header'ları.</li><li>Katmanlar: tenant'ın plan limiti, pahalı endpoint'e ayrı limit, genel koruma.</li></ul></td></tr>
+<tr><th>Tuzak</th><td>Her istekte veritabanına gitmek; Redis çökünce "fail closed" ile bütün API'yi düşürmek.</td></tr>
+</table></div>
+<div class="ex-label">API taslağı</div>
+<pre>Her cevapta:
+  RateLimit-Limit: 600
+  RateLimit-Remaining: 12
+  RateLimit-Reset: 18
+
+429 Too Many Requests
+Retry-After: 18
+
+GET /v1/limits   → müşteri kendi limitlerini görür</pre>
+<div class="say">I'd use a token bucket per tenant and per key at the gateway, with counters in Redis updated atomically. If Redis is down I fall back to a local per-pod limit, because the limiter shouldn't take the whole API down.</div>
+</details><details class="term qa" id="dosya-yukleme"><summary><b>Dosya yükleme API'si</b> <span class="muted small">· en yakını: API key yönetimi</span></summary>
+<div class="say">Users upload files up to 2 GB for the agent to use. Design the API.</div>
+<p class="small">Hazırladığın en yakın soru: <a href="api-keys.html">API key yönetimi</a>. Oradaki akışı kullan; aşağıdakileri değiştir.</p>
+<div class="table-wrap"><table>
+<tr><th style="width:30%">Aynı kalan</th><td>Kısa ömürlü, tek amaçlı kimlik bilgisi (presigned URL, API key'e benzer şekilde süreli ve kapsamlı); uzun iş için 202 + durum (Knowledge Sync'teki gibi).</td></tr>
+<tr><th>Farklı yapacakların</th><td><ul style="margin:0"><li><b>Büyük veri API'den geçmesin:</b> API bir presigned URL verir, istemci doğrudan object storage'a (S3, GCS) yükler; büyük dosyada multipart ve kaldığı yerden devam.</li><li><b>Bitince haber:</b> <code>:complete</code> → 202; arka planda virüs taraması, tür kontrolü, metin çıkarma. Durum: <code>uploading → scanning → ready | rejected</code>.</li><li><b>Yarım kalanlar:</b> storage lifecycle kuralı 24 saat sonra siler.</li><li><b>Sınırlar:</b> boyut, tür (uzantı değil içerik), tenant kotası.</li><li><b>İndirme:</b> kısa ömürlü presigned GET; yetki her seferinde kontrol edilir.</li></ul></td></tr>
+<tr><th>Tuzak</th><td>2 GB'ı API pod'undan geçirmek; dosyayı tarama bitmeden kullanılabilir yapmak.</td></tr>
+</table></div>
+<div class="ex-label">API taslağı</div>
+<pre>POST /v1/files              { name, size, content_type } → 201 { id, upload_url, expires_at }
+PUT  &lt;upload_url&gt;           → doğrudan storage'a
+POST /v1/files/{id}:complete → 202
+GET  /v1/files/{id}          → { status: "scanning" | "ready" | "rejected" }
+GET  /v1/files/{id}/content  → 302 presigned URL</pre>
+<div class="say">Large files shouldn't go through our API. The API hands out a presigned URL, the client uploads straight to object storage, and processing like virus scanning happens async with a status the client can poll.</div>
+</details>
+<nav class="pager"><a href="api-keys.html">← API key yönetimi</a><a href="../index.html">Ana sayfa →</a></nav>
+</main>
+<footer>Kişisel çalışma notları. Senaryolar alıştırma amaçlıdır; şirket adları anonimleştirilmiştir.</footer>
+
+</body>
+</html>

@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Feature flag servisi (okuma ağırlıklı)</title>
+<link rel="stylesheet" href="../assets/site.css?v=12">
+<script src="../assets/diagrams.js?v=12"></script>
+<style>
+details.qa { padding: 10px 16px; }
+details.qa summary { cursor: pointer; font-size: 16.5px; }
+details.qa[open] summary { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="topbar-inner">
+  <a class="brand" href="../index.html">Mülakat Hazırlığı</a>
+  <nav>
+    <a href="../index.html">Ana sayfa</a>
+    <a href="../knowledge-sync/kapsam.html">Knowledge Sync</a>
+    <a href="../agent-tasks/kapsam.html">Agent Tasks</a>
+    <a href="../deployment-api/kapsam.html">Deployment API</a>
+    <a class="active" href="feature-flags.html">Basit sorular</a>
+  </nav>
+</div>
+<div class="subnav"><nav>
+    <a class="active" href="feature-flags.html">Feature flags (okuma)</a>
+    <a href="usage.html">Usage metering (yazma)</a>
+    <a href="api-keys.html">API key yönetimi</a>
+    <a href="diger.html">Diğer sorular: ne değişir?</a>
+</nav></div></header>
+
+<main class="wide">
+<h1>Feature flag servisi (okuma ağırlıklı)</h1>
+<p class="lead">Okuma ağırlıklı basit bir soru. Saniyede yüz binlerce okuma, günde yüz yazma. Ana fikir: okumayı servise hiç getirmemek.</p>
+<nav class="toc"><b>Bu sayfada (playbook sırasıyla)</b><ol><li><a href="#kapsam">Kapsam</a></li><li><a href="#api">API sözleşmesi</a></li><li><a href="#cozum">Minimum çözüm</a></li><li><a href="#hata">Hata ve güvenlik</a></li><li><a href="#olcek">Ölçek ve follow-up</a></li><li><a href="#parcalar">Parçalar</a></li></ol></nav>
+<h2 id="kapsam">1 · Kapsam</h2>
+<div class="step-hint"><b>Playbook 1/5 · Kapsam.</b> kim kullanıyor, ana işlem ne, veri ne büyüklükte, ne kadar güncel olmalı? 5 dakikayı geçme.</div>
+<div class="say">We have about 200 services. Teams want to turn features on and off without deploying, roll them out to a percentage of users or to specific customers. Design the feature flag service and its API.</div>
+<div class="table-wrap"><table>
+<tr><th>Sor</th><th>Varsayılan cevap</th><th>Neyi değiştirir?</th></tr>
+<tr><td>Kim okur, kim yazar?</td><td>Servisler (SDK ile) okur; ekipler UI ya da CLI ile yazar.</td><td>Okuma ve yazma iki ayrı yol.</td></tr>
+<tr><td>Ne tür flag'ler?</td><td>Aç/kapa, yüzdeli rollout, belirli tenant'lar.</td><td>Kurallar ve nasıl değerlendirileceği.</td></tr>
+<tr><td>Değişiklik ne kadar hızlı yayılmalı?</td><td>30 saniye içinde her yerde.</td><td>Polling yeter mi, push mu?</td></tr>
+<tr><td>Flag servisi çökerse?</td><td>Uygulamalar son bilinen değerle çalışmaya devam etmeli.</td><td>Servis kritik yolda olmamalı.</td></tr>
+<tr><td>Ölçek?</td><td>200 servis × ~20 pod; her istekte birkaç flag.</td><td>Değerlendirme uzak bir çağrı olamaz.</td></tr>
+<tr><td>Audit?</td><td>Kim neyi ne zaman değiştirdi görülmeli.</td><td>Değişiklik geçmişi tablosu.</td></tr>
+</table></div>
+<div class="table-wrap"><table>
+<tr><th>Fonksiyonel</th><td>Flag oluştur ve güncelle · ortam başına kural · yüzdeli rollout · tenant hedefleme · değişiklik geçmişi.</td></tr>
+<tr><th>Fonksiyonel olmayan</th><td>Değerlendirme &lt; 1 ms (uygulamanın içinde) · yayılma p95 &lt; 30 sn · flag servisi çökse de uygulamalar çalışır · yönetim API'si %99.9.</td></tr>
+<tr><th>Kaba ölçek</th><td>4.000 SDK (200 servis × 20 pod) · ~2.000 flag · günde ~100 değişiklik · değerlendirme saniyede 150k ama hepsi uygulamanın içinde · servise gelen: 4.000 SDK × 15 sn'de bir ≈ 270 istek/sn, çoğu 304.</td></tr>
+</table></div>
+<p><b>Çıkarım:</b> değerlendirme ağı geçmemeli. Flag servisine gelen trafik kullanıcı trafiğiyle değil, SDK sayısıyla orantılı.</p>
+<div class="say">The key idea is that flags are evaluated inside each service by an SDK with a local copy, so the flag service is never in the request path. The SDK refreshes its copy with ETag polling, and if the service is down it keeps the last known values.</div>
+<h2 id="api">2 · API sözleşmesi</h2>
+<div class="step-hint"><b>Playbook 2/5 · API sözleşmesi.</b> endpoint'ler → bir tam request/response → hatalar. Idempotency ve yetkiyi burada söyle.</div>
+<p class="small muted">Endpoint'e ya da hata koduna tıkla: altında istek ve cevap açılır. ↗ işaretli hücre ilgili karara götürür.</p>
+<div class="diagram" id="apiFF" data-all="Endpoint&#x27;ler → SDK&#x27;nın okuması → değerlendirme → hatalar → kurallar.">
+  <div class="pills"></div>
+  <div class="api-sheet"><div class="stg" data-s="1" data-e="9"><p class="small" style="margin:0"><b>Kaynaklar:</b> flag · ortam kuralı (flag + ortam) · ortamın tüm kuralları (SDK paketi) · değişiklik geçmişi</p></div><div class="table-wrap"><table><tr class="stg" data-s="1" data-e="9"><th>Endpoint</th><th>Cevap</th><th>Ne yapar?</th></tr><tr class="stg" data-s="1" data-e="9"><td class="ex-toggle"><code>POST /v1/flags</code></td><td>201</td><td data-href="#f5">Flag oluştur (yönetim).</td></tr><tr class="ex-row stg" data-s="1" data-e="9" hidden><td colspan="3"><div class="ex-label">İstek</div><pre>POST /v1/flags
+Authorization: Bearer &lt;SSO token&gt;
+{ "key": "new-checkout",
+  "description": "Yeni ödeme sayfası",
+  "owner_team": "payments" }</pre><div class="ex-label">Cevap</div><pre>201 Created
+Location: /v1/flags/new-checkout
+{ "key": "new-checkout", "owner_team": "payments",
+  "environments": {} }</pre><p class="small" style="margin:4px 0 0">Yeni flag her ortamda kapalı başlar.</p></td></tr><tr class="stg" data-s="1" data-e="9"><td class="ex-toggle"><code>PUT /v1/flags/{key}/environments/{env}</code></td><td>200 / 412</td><td data-href="#f2">Bir ortamın kuralını değiştir.</td></tr><tr class="ex-row stg" data-s="1" data-e="9" hidden><td colspan="3"><div class="ex-label">İstek</div><pre>PUT /v1/flags/new-checkout/environments/prod
+Authorization: Bearer &lt;SSO token&gt;
+If-Match: "7"
+{ "enabled": true,
+  "tenants": ["ten_42"],
+  "rollout_percent": 10 }</pre><div class="ex-label">Cevap</div><pre>200 OK
+ETag: "8"
+{ "key": "new-checkout", "env": "prod", "version": 8,
+  "enabled": true, "tenants": ["ten_42"], "rollout_percent": 10 }</pre><p class="small" style="margin:4px 0 0"><code>If-Match</code>: başkası arada değiştirdiyse 412 döner; kayıp güncelleme olmaz.</p></td></tr><tr class="stg" data-s="1" data-e="9"><td class="ex-toggle"><code>GET /v1/environments/{env}/flags</code></td><td>200 / 304</td><td data-href="#f3">SDK'nın çektiği paket: ortamın tüm kuralları.</td></tr><tr class="ex-row stg" data-s="1" data-e="9" hidden><td colspan="3"><div class="ex-label">İstek</div><pre>GET /v1/environments/prod/flags
+Authorization: Bearer &lt;servis token&gt;
+If-None-Match: "1532"</pre><div class="ex-label">Değişiklik yoksa (çoğu zaman)</div><pre>304 Not Modified</pre><div class="ex-label">Değişiklik varsa</div><pre>200 OK
+ETag: "1533"
+{ "version": 1533,
+  "flags": {
+    "new-checkout": { "enabled": true, "tenants": ["ten_42"],
+                      "rollout_percent": 10 },
+    "dark-mode":    { "enabled": false } } }</pre><p class="small" style="margin:4px 0 0">Ayrıntısı 2. adımda: satır satır açıklama.</p></td></tr><tr class="stg" data-s="1" data-e="9"><td class="ex-toggle"><code>GET /v1/flags/{key}/history</code></td><td>200</td><td data-href="#f6">Kim ne zaman neyi değiştirdi.</td></tr><tr class="ex-row stg" data-s="1" data-e="9" hidden><td colspan="3"><div class="ex-label">İstek</div><pre>GET /v1/flags/new-checkout/history?env=prod
+Authorization: Bearer &lt;SSO token&gt;</pre><div class="ex-label">Cevap</div><pre>200 OK
+{ "data": [
+    { "version": 8, "actor": "user:ayse", "at": "2026-11-24T09:12:00Z",
+      "before": { "rollout_percent": 0 },
+      "after":  { "rollout_percent": 10 } } ],
+  "next_cursor": null }</pre></td></tr></table></div><div class="stg" data-s="2" data-e="9"><p style="margin:0"><b>En önemli istek SDK'nın okuması.</b> Her servisin her pod'u 15 saniyede bir bunu çağırır. Aşağıda satır satır.</p></div><div class="table-wrap"><table><tr class="stg" data-s="2" data-e="9"><th style="width:45%">İstek</th><th>Ne demek, neden?</th></tr><tr class="stg" data-s="2" data-e="9"><td><code>GET /v1/environments/prod/flags</code></td><td><code>prod</code> ortamının <b>tüm</b> flag kurallarını tek pakette ver. SDK flag flag sormaz; hepsini bir kerede alır.</td></tr><tr class="stg" data-s="2" data-e="9"><td><code>Authorization: Bearer &lt;servis token&gt;</code></td><td>Hangi servis soruyor. Bu token <b>sadece okuyabilir</b>; flag değiştiremez.</td></tr><tr class="stg" data-s="2" data-e="9"><td><code>If-None-Match: "1532"</code></td><td>"Elimdeki sürüm 1532." Değişmediyse sunucu gövde göndermez.</td></tr></table></div><div class="table-wrap"><table><tr class="stg" data-s="2" data-e="9"><th style="width:45%">Cevap</th><th>Ne demek, neden?</th></tr><tr class="stg" data-s="2" data-e="9"><td><code>304 Not Modified</code></td><td>Değişiklik yok, gövde yok. <b>Cevapların çoğu bu</b>; çok ucuz.</td></tr><tr class="stg" data-s="2" data-e="9"><td><code>200 OK + ETag: "1533"</code></td><td>Değişiklik var: yeni paket ve yeni sürüm numarası. SDK bir sonraki istekte bunu gönderir.</td></tr><tr class="stg" data-s="2" data-e="9"><td><code>{ "version": 1533, "flags": { … } }</code></td><td>Ortamın tüm kuralları. SDK bunu belleğe alır; değerlendirmeyi kendisi yapar.</td></tr></table></div><div class="stg" data-s="3" data-e="9"><pre>client.isEnabled("new-checkout", { tenant: "ten_42", user: "user_ali" })
+
+1. flag bu ortamda kapalı mı?          → false
+2. tenant listede mi?                  → true
+3. hash("new-checkout" + "user_ali") % 100 &lt; rollout_percent ?
+                                         → true / false</pre></div><div class="stg" data-s="3" data-e="9" data-href="#f4"><p class="small" style="margin:0">Ağ yok, &lt; 1 ms. Aynı kullanıcı hep aynı sonucu alır (hash deterministik); yüzde %10'dan %20'ye çıkınca önce açık olanlar açık kalır.</p></div><div class="stg" data-s="4" data-e="9"><p class="small" style="margin:0"><b>Tek hata formatı:</b> sabit <code>code</code>, <code>message</code>, <code>request_id</code>, gerekirse <code>details</code>.</p></div><div class="table-wrap"><table><tr class="stg" data-s="4" data-e="9"><th>Kod</th><th>Ne zaman?</th></tr><tr class="stg" data-s="4" data-e="9"><td class="ex-toggle">400 <code>VALIDATION_FAILED</code></td><td>Ör. <code>rollout_percent: 150</code>.</td></tr><tr class="ex-row stg" data-s="4" data-e="9" hidden><td colspan="2"><pre>400 Bad Request
+{ "error": { "code": "VALIDATION_FAILED",
+             "message": "rollout_percent must be between 0 and 100",
+             "request_id": "req_7b3…",
+             "details": { "field": "rollout_percent" } } }</pre></td></tr><tr class="stg" data-s="4" data-e="9"><td class="ex-toggle">403 <code>FORBIDDEN</code></td><td data-href="#f5">Takım flag'in sahibi değil; ya da servis token'ı ile yazmaya çalışıyor.</td></tr><tr class="ex-row stg" data-s="4" data-e="9" hidden><td colspan="2"><pre>403 Forbidden
+{ "error": { "code": "FORBIDDEN",
+             "message": "Team growth does not own flag new-checkout",
+             "request_id": "req_7b3…" } }</pre></td></tr><tr class="stg" data-s="4" data-e="9"><td class="ex-toggle">404 <code>NOT_FOUND</code></td><td>Flag ya da ortam yok.</td></tr><tr class="ex-row stg" data-s="4" data-e="9" hidden><td colspan="2"><pre>404 Not Found
+{ "error": { "code": "NOT_FOUND",
+             "message": "Flag new-checkout not found",
+             "request_id": "req_7b3…" } }</pre></td></tr><tr class="stg" data-s="4" data-e="9"><td class="ex-toggle">409 <code>FLAG_EXISTS</code></td><td>Aynı isimde flag var.</td></tr><tr class="ex-row stg" data-s="4" data-e="9" hidden><td colspan="2"><pre>409 Conflict
+{ "error": { "code": "FLAG_EXISTS",
+             "message": "Flag new-checkout already exists",
+             "request_id": "req_7b3…" } }</pre></td></tr><tr class="stg" data-s="4" data-e="9"><td class="ex-toggle">412 <code>PRECONDITION_FAILED</code></td><td data-href="#f2"><code>If-Match</code> eski: başkası arada değiştirmiş.</td></tr><tr class="ex-row stg" data-s="4" data-e="9" hidden><td colspan="2"><pre>412 Precondition Failed
+{ "error": { "code": "PRECONDITION_FAILED",
+             "message": "Flag changed since version 7; current version is 8",
+             "request_id": "req_7b3…",
+             "details": { "current_version": 8 } } }</pre></td></tr></table></div><div class="table-wrap"><table><tr class="stg" data-s="5" data-e="9"><th>Kural</th><th>Karar</th></tr><tr class="stg" data-s="5" data-e="9" data-href="#f1"><td>Değerlendirme</td><td>Uygulamanın içinde, SDK'daki kopyayla. Flag servisi istek yolunda değil.</td></tr><tr class="stg" data-s="5" data-e="9" data-href="#f3"><td>Okuma</td><td><code>ETag</code> / <code>If-None-Match</code> ile; çoğu cevap 304.</td></tr><tr class="stg" data-s="5" data-e="9" data-href="#f2"><td>Yazma</td><td><code>If-Match</code> ile; aynı anda iki değişiklik birbirini ezmez.</td></tr><tr class="stg" data-s="5" data-e="9" data-href="#f7"><td>Silme</td><td>Flag silinmez, arşivlenir; kod hâlâ soruyorsa SDK koddaki varsayılanı döner.</td></tr></table></div></div>
+  <div class="stage-text"><div class="t"></div><div class="d"></div></div>
+  <div class="btns"><button class="btn" type="button" data-act="prev">← Önceki</button><button class="btn" type="button" data-act="next">Sonraki →</button><button class="btn" type="button" data-act="all">Hepsi</button></div>
+</div>
+<div class="say">Writes are rare and go through If-Match; reads happen in the SDK from a local copy, and the SDK refreshes it with ETag polling, so most responses are 304.</div>
+<h2 id="cozum">3 · Minimum çözüm</h2>
+<div class="step-hint"><b>Playbook 3/5 · Minimum çözüm.</b> minimum tablolar ve akış. Çiz, sonra dur ve sor.</div>
+<div class="dm"><div class="dm-card"><div class="dm-kind">Postgres</div><pre><b>flags</b>
+  key: new-checkout
+  owner_team: payments
+  description: "Yeni ödeme sayfası"
+  archived: false</pre></div><div class="dm-card"><div class="dm-kind">Postgres</div><pre><b>flag_rules</b>
+  flag_key: new-checkout
+  env: prod
+  enabled: true
+  tenants: [ten_42]
+  rollout_percent: 10
+  version: 8</pre></div><div class="dm-card"><div class="dm-kind">Postgres</div><pre><b>environments</b>
+  env: prod
+  version: 1533
+      ← her değişiklikte +1, ETag bu</pre></div><div class="dm-card"><div class="dm-kind">Postgres</div><pre><b>flag_changes</b>
+  flag_key: new-checkout
+  env: prod
+  actor: user:ayse
+  before: { rollout_percent: 0 }
+  after:  { rollout_percent: 10 }
+  at: 2026-11-24T09:12:00Z</pre></div><div class="dm-card"><div class="dm-kind">SDK (uygulamanın belleği)</div><pre><b>prod paketi</b>
+  version: 1533
+  flags: { new-checkout: {…}, … }
+  fetched_at: 09:12:15
+      ← diske de yazılır (restart sonrası)</pre></div></div>
+<div class="diagram" id="diagFF" data-glossary="#" data-all="Üstte yazma yolu, altta okuma yolu. Değerlendirme uygulamanın içinde.">
+  <div class="pills"></div>
+  <svg class="arch" viewBox="0 0 1050 410" role="img" aria-labelledby="diagFF-t diagFF-d"><title id="diagFF-t">Feature flag servisi</title><desc id="diagFF-d">Ekip arayüzü, gateway, Flags API, Postgres, uygulama kodu ve SDK; üç aşamada eklenir.</desc><defs>
+<marker id="diagFFm1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#AFA9EC" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<marker id="diagFFm2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#5DCAA5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<marker id="diagFFm3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#F0997B" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<marker id="diagFFm4" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#EF9F27" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<marker id="diagFFm5" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#ED93B1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+</defs>
+<g class="c-purple stg" data-s="1" data-e="9"><rect x="20" y="40" width="100" height="56" rx="6" stroke-width="0.6"/><text class="th" x="70" y="59" text-anchor="middle" dominant-baseline="central">Team UI</text><text class="ts" x="70" y="77" text-anchor="middle" dominant-baseline="central">or CLI</text></g>
+<g class="c-purple stg" data-s="1" data-e="9" data-term="gateway"><rect x="220" y="40" width="100" height="56" rx="6" stroke-width="0.6"/><text class="th" x="270" y="59" text-anchor="middle" dominant-baseline="central">Gateway</text><text class="ts" x="270" y="77" text-anchor="middle" dominant-baseline="central">SSO, roles</text></g>
+<g class="c-purple stg" data-s="1" data-e="9" data-term="flags-api"><rect x="420" y="40" width="140" height="336" rx="6" stroke-width="0.6"/><text class="th" x="490" y="199" text-anchor="middle" dominant-baseline="central">Flags API</text><text class="ts" x="490" y="217" text-anchor="middle" dominant-baseline="central">write + read</text></g>
+<g class="c-purple stg" data-s="1" data-e="9" data-term="postgres"><rect x="660" y="40" width="150" height="56" rx="6" stroke-width="0.6"/><text class="th" x="735" y="59" text-anchor="middle" dominant-baseline="central">Postgres</text><text class="ts" x="735" y="77" text-anchor="middle" dominant-baseline="central">rules, version</text></g>
+<g class="c-teal stg" data-s="2" data-e="9" data-term="sdk"><rect x="20" y="320" width="100" height="56" rx="6" stroke-width="0.6"/><text class="th" x="70" y="339" text-anchor="middle" dominant-baseline="central">App code</text><text class="ts" x="70" y="357" text-anchor="middle" dominant-baseline="central">isEnabled()</text></g>
+<g class="c-teal stg" data-s="2" data-e="9" data-term="sdk"><rect x="220" y="320" width="100" height="56" rx="6" stroke-width="0.6"/><text class="th" x="270" y="339" text-anchor="middle" dominant-baseline="central">SDK</text><text class="ts" x="270" y="357" text-anchor="middle" dominant-baseline="central">in-memory copy</text></g>
+<g class="stg" data-s="1" data-e="9"><path d="M120 60 L218 60" stroke="#AFA9EC" stroke-width="1.6" fill="none" marker-end="url(#diagFFm1)"/><text class="al" x="170" y="52" text-anchor="middle" fill="#AFA9EC">1 · PUT</text></g>
+<g class="stg" data-s="1" data-e="9"><path d="M320 60 L418 60" stroke="#AFA9EC" stroke-width="1.6" fill="none" marker-end="url(#diagFFm1)"/><text class="al" x="370" y="52" text-anchor="middle" fill="#AFA9EC">2 · auth</text></g>
+<g class="stg" data-s="1" data-e="9"><path d="M560 60 L658 60" stroke="#AFA9EC" stroke-width="1.6" fill="none" marker-end="url(#diagFFm1)"/><text class="al" x="610" y="52" text-anchor="middle" fill="#AFA9EC">3 · write</text></g>
+<g class="stg" data-s="2" data-e="9"><path d="M120 348 L218 348" stroke="#5DCAA5" stroke-width="1.6" fill="none" marker-end="url(#diagFFm2)"/><text class="al" x="170" y="340" text-anchor="middle" fill="#5DCAA5">4 · local</text></g>
+<g class="stg" data-s="2" data-e="9"><path d="M320 356 L418 356" stroke="#5DCAA5" stroke-width="1.6" fill="none" marker-end="url(#diagFFm2)"/><text class="al" x="370" y="376" text-anchor="middle" fill="#5DCAA5">5 · poll</text></g>
+<g class="stg" data-s="2" data-e="9"><path d="M660 86 L562 86" stroke="#5DCAA5" stroke-width="1.6" fill="none" stroke-dasharray="5 4" marker-end="url(#diagFFm2)"/><text class="al" x="610" y="104" text-anchor="middle" fill="#5DCAA5">6 · load</text></g>
+<g class="stg" data-s="3" data-e="9"><path d="M420 330 L322 330" stroke="#F0997B" stroke-width="1.6" fill="none" stroke-dasharray="5 4" marker-end="url(#diagFFm3)"/><text class="al" x="370" y="322" text-anchor="middle" fill="#F0997B">7 · push</text></g>
+</svg>
+  <div class="stage-text"><div class="t"></div><div class="d"></div></div>
+  <div class="btns"><button class="btn" type="button" data-act="prev">← Önceki</button><button class="btn" type="button" data-act="next">Sonraki →</button><button class="btn" type="button" data-act="all">Hepsi</button></div>
+</div>
+<details class="note arrows" open><summary><b>Okların açıklaması</b></summary><div class="table-wrap"><table><tr><th>No</th><th>Nereden → nereye</th><th>Ne yapar?</th></tr><tr><td style="white-space:nowrap"><span class="dot" style="background:#AFA9EC"></span><b>1</b></td><td style="white-space:nowrap">Team UI → Gateway</td><td><code>PUT /v1/flags/{key}/environments/prod</code> + <code>If-Match</code></td></tr><tr><td style="white-space:nowrap"><span class="dot" style="background:#AFA9EC"></span><b>2</b></td><td style="white-space:nowrap">Gateway → Flags API</td><td>SSO token doğrulandı; kullanıcının takımı ve rolü iletilir.</td></tr><tr><td style="white-space:nowrap"><span class="dot" style="background:#AFA9EC"></span><b>3</b></td><td style="white-space:nowrap">Flags API → Postgres</td><td>Tek transaction: kural güncellenir, ortamın <code>version</code>'ı bir artar, değişiklik geçmişe yazılır.</td></tr><tr><td style="white-space:nowrap"><span class="dot" style="background:#5DCAA5"></span><b>4</b></td><td style="white-space:nowrap">App code → SDK</td><td><code>isEnabled()</code> çağrısı. Ağ yok: SDK bellekteki kopyaya bakar.</td></tr><tr><td style="white-space:nowrap"><span class="dot" style="background:#5DCAA5"></span><b>5</b></td><td style="white-space:nowrap">SDK → Flags API</td><td>15 sn'de bir <code>GET /v1/environments/prod/flags</code> + <code>If-None-Match</code>; çoğu cevap 304.</td></tr><tr><td style="white-space:nowrap"><span class="dot" style="background:#5DCAA5"></span><b>6</b></td><td style="white-space:nowrap">Postgres → Flags API</td><td>API pod'ları ortamın son paketini bellekte tutar; <code>version</code> değişince Postgres'ten yeniden yükler.</td></tr><tr><td style="white-space:nowrap"><span class="dot" style="background:#F0997B"></span><b>7</b></td><td style="white-space:nowrap">Flags API → SDK</td><td>Follow-up: polling yerine açık bir akış (SSE) ile değişiklik anında gönderilir.</td></tr></table></div></details>
+<div class="say">This is the simplest version that works: writes go to Postgres with a version number, and every service evaluates flags locally from a copy it refreshes with ETags. Where would you like me to go deeper?</div>
+<h2 id="hata">4 · Hata ve güvenlik</h2>
+<div class="step-hint"><b>Playbook 4/5 · Hata ve güvenlik.</b> her cevap: karar → gerekçe → bedel.</div>
+<div class="table-wrap"><table><tr><th>Soru</th><th>Karar</th><th>Gerekçe</th><th>Bedel / alternatif</th></tr><tr id="f1"><td><b>What happens to the apps if the flag service is down?</b></td><td>SDK son bilinen değerlerle devam eder; paketi diske de yazar, restart sonrası oradan başlar. Hiç yoksa koddaki varsayılan.</td><td>Flag servisi 200 servisin bağımlılığı; çöküşü hepsini düşürmemeli.</td><td>Çöküş boyunca değişiklikler yayılmaz; varsayılanlar düşünülerek yazılmalı.</td></tr><tr id="f2"><td><b>Two people change the same flag at the same time.</b></td><td><code>If-Match</code> ile iyimser kilit (optimistic locking): ikinciye 412, güncel hali okuyup tekrar dener.</td><td>Kayıp güncelleme olmasın: biri diğerinin değişikliğini fark etmeden ezmesin.</td><td>Arayüz çakışmayı göstermeli. Alternatif: "son yazan kazanır" (basit ama tehlikeli).</td></tr><tr id="f3"><td><b>How fast does a change reach every service?</b></td><td>15 sn polling + API'nin paketi yenilemesi → p95 &lt; 30 sn. Daha hızlısı gerekirse push (SSE).</td><td>Polling basit ve dayanıklı; ETag sayesinde ucuz.</td><td>Push saniye altı ama 4.000 açık bağlantı ve daha karmaşık hata durumu.</td></tr><tr id="f4"><td><b>How do percentage rollouts stay consistent?</b></td><td><code>hash(flag_key + user_id) % 100 &lt; percent</code>: aynı kullanıcı hep aynı sonucu alır; yüzde artınca açık olanlar açık kalır.</td><td>Kullanıcı her istekte farklı ekran görmemeli.</td><td>Kullanıcı yoksa (anonim) oturum id'si gibi başka bir anahtar gerekir.</td></tr><tr id="f5"><td><b>Who may change a flag?</b></td><td>Flag'in sahibi takım; prod değişikliği geçmişe yazılır. Servislerin token'ı salt okuma.</td><td>Yanlış kişi başka takımın özelliğini kapatmamalı.</td><td>Basit bir rol modeli. Prod için ikinci kişi onayı istenebilir.</td></tr><tr id="f6"><td><b>A flag change breaks production.</b></td><td>Geçmişten bir önceki hale dön (yeni bir değişiklik olarak); kritik özellikler için "kill switch" flag'leri.</td><td>Geri dönüş deploy gerektirmez; flag'lerin asıl faydası bu.</td><td>Geri dönüş de yayılma süresi kadar sürer (≤ 30 sn).</td></tr><tr id="f7"><td><b>Old flags pile up.</b></td><td>Her flag'in sahibi ve son kullanım tarihi; SDK hangi flag'leri değerlendirdiğini sayıp bildirir; 30 gündür kullanılmayanlar temizlik listesine.</td><td>Ölü flag'ler kodu karmaşıklaştırır.</td><td>SDK'dan sayaç toplamak.</td></tr><tr id="f8"><td><b>How do we know it's healthy?</b></td><td>SDK'ların paket yaşı (en son başarılı okuma ne zaman), 304/200 oranı, yayılma süresi, yönetim API'sinin hata oranı.</td><td>Asıl risk eski paketle çalışan servisler.</td><td>Metrik SDK'dan gelmeli.</td></tr></table></div>
+<h2 id="olcek">5 · Ölçek ve follow-up</h2>
+<div class="step-hint"><b>Playbook 5/5 · Ölçek ve follow-up.</b> önce darboğazı adlandır, sonra parçayı ekle.</div>
+<p class="small muted">Önce soruyu oku, 20 saniyede kendi cevabını sesli söyle, sonra aç.</p>
+<details class="term qa"><summary><b>1.</b> Changes must apply within a second.</summary>
+<p class="small muted" style="margin:8px 0 4px">Ana fikir: Polling yerine SSE ile push; cluster başına relay ile bağlantı sayısını azalt.</p>
+<div class="say">Then I'd switch from polling to push: the SDK keeps an SSE stream open and gets changes immediately. To avoid thousands of connections to the central service, I'd put a small relay in each cluster that holds one stream and serves the local SDKs.</div>
+</details>
+<details class="term qa"><summary><b>2.</b> A rule needs user attributes like country or plan.</summary>
+<p class="small muted" style="margin:8px 0 4px">Ana fikir: Kurallar SDK'da, uygulamanın verdiği özelliklerle değerlendirilir; kişisel veri flag servisine gitmez.</p>
+<div class="say">The rules stay in the SDK and the app passes the attributes at evaluation time, so no personal data ever goes to the flag service.</div>
+</details>
+<details class="term qa"><summary><b>3.</b> Mobile apps and browsers need flags too.</summary>
+<p class="small muted" style="margin:8px 0 4px">Ana fikir: Bütün kuralları istemciye gönderme (sızar); sunucu kullanıcı için sonuçları hesaplayıp döner.</p>
+<div class="say">I wouldn't ship all rules to a browser, because they'd leak targeting logic. A small endpoint evaluates the flags for that user on the server and returns only the results, which can be cached briefly.</div>
+</details>
+<details class="term qa"><summary><b>4.</b> Why not just a config file in Git?</summary>
+<p class="small muted" style="margin:8px 0 4px">Ana fikir: Git'teki config deploy ister; flag'ler çalışırken, tenant ve yüzde bazında değişir.</p>
+<div class="say">A config file in Git is great for static settings, but changing it needs a deploy. Flags change at runtime, per tenant and per percentage, and need instant rollback, so they need their own service.</div>
+</details>
+<h2 id="parcalar">Parçalar</h2>
+<p class="small muted">Diyagramdaki kutuya tıklayınca buraya gelirsin: her parça için hangi problemi çözdüğü, neden şimdi gerektiği ve daha basit alternatifi.</p>
+<section class="term" id="p-gateway"><h3>Gateway <a class="anchor" href="#p-gateway">#</a></h3><p>Yönetim isteklerinde SSO token'ını doğrular ve rate limit uygular.</p><div class="decide"><div><b>Hangi problemi çözüyor?</b> Kimlik ve rol kontrolü tek yerde.</div><div><b>Neden şimdi?</b> 1. aşama.</div><div><b>Daha basit alternatif:</b> Flags API'nin kendi middleware'i.</div><div><b>Bedeli:</b> Bir ağ adımı daha.</div></div></section>
+<section class="term" id="p-flags-api"><h3>Flags API <a class="anchor" href="#p-flags-api">#</a></h3><p>Flag kurallarını yazar ve SDK'lara paket olarak verir. Paketi bellekte tutar.</p><div class="decide"><div><b>Hangi problemi çözüyor?</b> Kuralları tek yerde, sürümlü ve geçmişiyle tutmak.</div><div><b>Neden şimdi?</b> 1. aşama.</div><div><b>Daha basit alternatif:</b> Git'te bir config dosyası (ama her değişiklik deploy ister).</div><div><b>Bedeli:</b> Bir servis daha işletmek.</div></div></section>
+<section class="term" id="p-postgres"><h3>Postgres <a class="anchor" href="#p-postgres">#</a></h3><p>Kurallar, ortam sürüm numarası ve değişiklik geçmişi; hepsi tek transaction'da yazılır.</p><div class="decide"><div><b>Hangi problemi çözüyor?</b> Kalıcı ve doğru durum.</div><div><b>Neden şimdi?</b> 1. aşama.</div><div><b>Daha basit alternatif:</b> Bu zaten en basit seçenek.</div><div><b>Bedeli:</b> Okuma yükü yok denecek kadar az: API paketi bellekte tutuyor.</div></div></section>
+<section class="term" id="p-sdk"><h3>SDK (uygulamanın içinde) <a class="anchor" href="#p-sdk">#</a></h3><p>Her serviste çalışan kütüphane. Paketi 15 sn'de bir ETag ile çeker, belleğe ve diske yazar, <code>isEnabled()</code>'ı ağsız cevaplar.</p><div class="decide"><div><b>Hangi problemi çözüyor?</b> Değerlendirmenin &lt; 1 ms olması ve flag servisi çökünce de çalışması.</div><div><b>Neden şimdi?</b> 2. aşama.</div><div><b>Daha basit alternatif:</b> Her istekte Flags API'ye sormak (gecikme ve tek hata noktası).</div><div><b>Bedeli:</b> SDK'yı her dil için yazmak ve güncel tutmak; değişiklikler gecikmeyle gelir.</div></div></section>
+<nav class="pager"><a href="../index.html">← Ana sayfa</a><a href="usage.html">Usage metering →</a></nav>
+</main>
+<footer>Kişisel çalışma notları. Senaryolar alıştırma amaçlıdır; şirket adları anonimleştirilmiştir.</footer>
+<script>initStepper("apiFF", [{"n": "1 · Endpoint'ler", "c": "#AFA9EC", "d": "Yönetim tarafı (oluştur, değiştir, geçmiş) ve okuma tarafı (SDK paketi)."}, {"n": "2 · Tek tam istek", "c": "#5DCAA5", "d": "En çok çağrılan istek: SDK'nın ETag ile okuması. Her satırın neden orada olduğu."}, {"n": "3 · Değerlendirme", "c": "#F0997B", "d": "Flag'in değeri uygulamanın içinde nasıl hesaplanır?"}, {"n": "4 · Hatalar", "c": "#EF9F27", "d": "Tek hata formatı; en önemlisi 412 (eşzamanlı değişiklik)."}, {"n": "5 · Kurallar", "c": "#ED93B1", "d": "Dört kural, tek cümleyle."}]);</script><script>initStepper("diagFF", [{"n": "1 · Yazma yolu", "c": "#AFA9EC", "d": "Ekip flag'i değiştirir (ok 1–2). Flags API kuralı, ortamın sürüm numarasını ve geçmişi tek transaction'da Postgres'e yazar (ok 3)."}, {"n": "2 · Okuma yolu", "c": "#5DCAA5", "d": "Uygulama <code>isEnabled()</code> der; SDK bellekteki kopyaya bakar, ağ yok (ok 4). SDK 15 sn'de bir ETag ile yeni paket var mı diye sorar (ok 5); API pod'ları paketi bellekte tutar ve sürüm değişince yeniler (ok 6). Flag servisi çökse de uygulamalar son kopyayla çalışır."}, {"n": "3 · Follow-up: anında yayılma", "c": "#F0997B", "d": "<b>Sorulursa ekle</b>, ör. \"değişiklik 1 saniyede yansımalı\". Polling yerine açık bir SSE akışı ile push (ok 7). 4.000 açık bağlantı demek; cluster başına bir relay ile azaltılır."}]);</script>
+</body>
+</html>

@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Usage metering (yazma ağırlıklı)</title>
+<link rel="stylesheet" href="../assets/site.css?v=12">
+<script src="../assets/diagrams.js?v=12"></script>
+<style>
+details.qa { padding: 10px 16px; }
+details.qa summary { cursor: pointer; font-size: 16.5px; }
+details.qa[open] summary { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="topbar-inner">
+  <a class="brand" href="../index.html">Mülakat Hazırlığı</a>
+  <nav>
+    <a href="../index.html">Ana sayfa</a>
+    <a href="../knowledge-sync/kapsam.html">Knowledge Sync</a>
+    <a href="../agent-tasks/kapsam.html">Agent Tasks</a>
+    <a href="../deployment-api/kapsam.html">Deployment API</a>
+    <a class="active" href="feature-flags.html">Basit sorular</a>
+  </nav>
+</div>
+<div class="subnav"><nav>
+    <a href="feature-flags.html">Feature flags (okuma)</a>
+    <a class="active" href="usage.html">Usage metering (yazma)</a>
+    <a href="api-keys.html">API key yönetimi</a>
+    <a href="diger.html">Diğer sorular: ne değişir?</a>
+</nav></div></header>
+
+<main class="wide">
+<h1>Usage metering (yazma ağırlıklı)</h1>
+<p class="lead">Yazma ağırlıklı basit bir soru. Saniyede on binlerce olay ve fatura doğruluğu. Ana fikir: toplamları artırma, ham veriden hesapla.</p>
+<nav class="toc"><b>Bu sayfada (playbook sırasıyla)</b><ol><li><a href="#kapsam">Kapsam</a></li><li><a href="#api">API sözleşmesi</a></li><li><a href="#cozum">Minimum çözüm</a></li><li><a href="#hata">Hata ve güvenlik</a></li><li><a href="#olcek">Ölçek ve follow-up</a></li><li><a href="#parcalar">Parçalar</a></li></ol></nav>
+<h2 id="kapsam">1 · Kapsam</h2>
+<div class="step-hint"><b>Playbook 1/5 · Kapsam.</b> kim kullanıyor, ana işlem ne, veri ne büyüklükte, ne kadar güncel olmalı? 5 dakikayı geçme.</div>
+<div class="say">Every model call in our platform reports how many tokens it used. Design the API and the system that records usage, so we can bill customers and show them a usage dashboard.</div>
+<div class="table-wrap"><table>
+<tr><th>Sor</th><th>Varsayılan cevap</th><th>Neyi değiştirir?</th></tr>
+<tr><td>Kim yazar, kim okur?</td><td>Yazan: iç servisler (LLM gateway). Okuyan: faturalama (ay sonu), müşteri paneli.</td><td>Yazma iç API, okuma dış API.</td></tr>
+<tr><td>Hacim?</td><td>Saniyede ~20k olay, tepe 60k.</td><td>Toplu (batch) yazma ve Kafka.</td></tr>
+<tr><td>Ne kadar doğru olmalı?</td><td>Fatura için tam: ne eksik ne fazla. Panel birkaç dakika gecikebilir.</td><td>Hiçbir olay iki kez sayılmamalı.</td></tr>
+<tr><td>Ne kadar güncel?</td><td>Panel 5 dk içinde; fatura ay sonunda.</td><td>Toplamlar periyodik hesaplanabilir.</td></tr>
+<tr><td>Geç gelen olay?</td><td>Retry yüzünden saatler sonra gelebilir.</td><td>Toplamlar yeniden hesaplanabilmeli.</td></tr>
+<tr><td>Ne kadar saklanır?</td><td>Ham olay 90 gün; günlük toplam yıllarca.</td><td>İki katman: ham ve toplam.</td></tr>
+</table></div>
+<div class="table-wrap"><table>
+<tr><th>Fonksiyonel</th><td>Olay kaydet (toplu) · tenant, gün ve model kırılımlı kullanım sorgula · ay kapanışı.</td></tr>
+<tr><th>Fonksiyonel olmayan</th><td>Olay kaybı 0, çift sayım 0 · yazma p99 &lt; 50 ms (model çağrısını yavaşlatmasın) · panel tazeliği 5 dk.</td></tr>
+<tr><th>Kaba ölçek</th><td>20k olay/sn × 86.400 ≈ 1,7 milyar olay/gün × ~200 bayt ≈ 350 GB/gün ham veri. Toplamlar küçük: 500 tenant × 10 model × gün.</td></tr>
+</table></div>
+<p><b>Çıkarım:</b> ham olaylar Postgres'e sığmaz, sütun tabanlı bir depoya (ClickHouse, BigQuery) gider; küçük toplamlar Postgres'te. Zor kısım doğruluk: fatura için her olay tam bir kez sayılmalı.</p>
+<div class="say">Writes are high volume and must be counted exactly once for billing. So I accept events in batches, keep raw events in a columnar store deduplicated by event id, and compute small totals from the raw data instead of incrementing counters.</div>
+<h2 id="api">2 · API sözleşmesi</h2>
+<div class="step-hint"><b>Playbook 2/5 · API sözleşmesi.</b> endpoint'ler → bir tam request/response → hatalar. Idempotency ve yetkiyi burada söyle.</div>
+<p class="small muted">Endpoint'e ya da hata koduna tıkla: altında istek ve cevap açılır. ↗ işaretli hücre ilgili karara götürür.</p>
+<div class="diagram" id="apiUM" data-all="Endpoint&#x27;ler → toplu yazma → toplamlar → hatalar → kurallar.">
+  <div class="pills"></div>
+  <div class="api-sheet"><div class="stg" data-s="1" data-e="9"><p class="small" style="margin:0"><b>Kaynaklar:</b> usage event (ham olay, değişmez) · usage (toplam, sorgu) · billing period (ay)</p></div><div class="table-wrap"><table><tr class="stg" data-s="1" data-e="9"><th>Endpoint</th><th>Cevap</th><th>Ne yapar?</th></tr><tr class="stg" data-s="1" data-e="9"><td class="ex-toggle"><code>POST /v1/usage-events:batch</code></td><td>202</td><td data-href="#u1">Toplu olay gönder (iç, LLM gateway).</td></tr><tr class="ex-row stg" data-s="1" data-e="9" hidden><td colspan="3"><div class="ex-label">İstek</div><pre>POST /v1/usage-events:batch
+Authorization: Bearer &lt;servis token: llm-gateway&gt;
+{ "events": [
+    { "event_id": "task_7d2:call_3",
+      "tenant_id": "ten_42",
+      "model": "model-large",
+      "input_tokens": 8100,
+      "output_tokens": 420,
+      "occurred_at": "2026-11-24T09:12:03.120Z" },
+    … 499 olay daha ] }</pre><div class="ex-label">Cevap</div><pre>202 Accepted
+{ "accepted": 500 }</pre><p class="small" style="margin:4px 0 0">Ayrıntısı 2. adımda: satır satır açıklama.</p></td></tr><tr class="stg" data-s="1" data-e="9"><td class="ex-toggle"><code>GET /v1/usage?from=&amp;to=&amp;group_by=day,model</code></td><td>200</td><td data-href="#u5">Müşteri paneli: kullanım kırılımı.</td></tr><tr class="ex-row stg" data-s="1" data-e="9" hidden><td colspan="3"><div class="ex-label">İstek</div><pre>GET /v1/usage?from=2026-11-01&amp;to=2026-11-24&amp;group_by=day,model
+Authorization: Bearer &lt;müşteri JWT&gt;</pre><div class="ex-label">Cevap</div><pre>200 OK
+{ "data": [
+    { "day": "2026-11-23", "model": "model-large",
+      "input_tokens": 12500000, "output_tokens": 830000 } ],
+  "as_of": "2026-11-24T09:10:00Z" }</pre><p class="small" style="margin:4px 0 0"><code>as_of</code>: toplamlar en son ne zaman hesaplandı. Tenant token'dan gelir.</p></td></tr><tr class="stg" data-s="1" data-e="9"><td class="ex-toggle"><code>GET /v1/usage/summary?month=2026-11</code></td><td>200</td><td>Bu ayın toplamı.</td></tr><tr class="ex-row stg" data-s="1" data-e="9" hidden><td colspan="3"><div class="ex-label">İstek</div><pre>GET /v1/usage/summary?month=2026-11
+Authorization: Bearer &lt;müşteri JWT&gt;</pre><div class="ex-label">Cevap</div><pre>200 OK
+{ "month": "2026-11", "input_tokens": 290000000,
+  "output_tokens": 18000000, "as_of": "2026-11-24T09:10:00Z" }</pre></td></tr><tr class="stg" data-s="1" data-e="9"><td class="ex-toggle"><code>POST /v1/billing-periods/{month}:close</code></td><td>202</td><td data-href="#u3">Ay kapanışı (iç, faturalama).</td></tr><tr class="ex-row stg" data-s="1" data-e="9" hidden><td colspan="3"><div class="ex-label">İstek</div><pre>POST /v1/billing-periods/2026-11:close
+Authorization: Bearer &lt;servis token: billing&gt;</pre><div class="ex-label">Cevap</div><pre>202 Accepted
+{ "period": "2026-11", "status": "closing" }</pre><p class="small" style="margin:4px 0 0">Fatura ham veriden hesaplanır. Kapanıştan sonra gelen olay sonraki faturaya düzeltme satırı olur.</p></td></tr></table></div><div class="stg" data-s="2" data-e="9"><p style="margin:0"><b>En önemli istek toplu yazma.</b> Aşağıda satır satır.</p></div><div class="table-wrap"><table><tr class="stg" data-s="2" data-e="9"><th style="width:45%">İstek</th><th>Ne demek, neden?</th></tr><tr class="stg" data-s="2" data-e="9"><td><code>POST /v1/usage-events:batch</code></td><td>Birden çok olayı tek istekte gönder. Olay başına bir istek saniyede 20k istek demek; toplu gönderim bunu ~40'a indirir.</td></tr><tr class="stg" data-s="2" data-e="9"><td><code>Authorization: Bearer &lt;servis token: llm-gateway&gt;</code></td><td><b>Sadece iç servisler</b> yazabilir. Müşteri token'ıyla yazma yok; yoksa müşteri kendi faturasını değiştirebilirdi.</td></tr><tr class="stg" data-s="2" data-e="9"><td><code>"event_id": "task_7d2:call_3"</code></td><td>Olayı <b>üreten taraf</b> verir; idempotency anahtarının kendisi. Aynı olay iki kez gelirse aynı id ile gelir ve bir kez sayılır.</td></tr><tr class="stg" data-s="2" data-e="9"><td><code>"tenant_id": "ten_42"</code></td><td>Burada body'de, çünkü çağıran iç servis bir müşteri değil; olayın kime ait olduğunu söylüyor. Müşteri isteklerinde tenant yine token'dan gelir.</td></tr><tr class="stg" data-s="2" data-e="9"><td><code>"occurred_at": "…09:12:03.120Z"</code></td><td>Olayın <b>olduğu</b> an, bizim aldığımız an değil. Saatler sonra gelen olay doğru güne yazılır.</td></tr></table></div><div class="table-wrap"><table><tr class="stg" data-s="2" data-e="9"><th style="width:45%">Cevap</th><th>Ne demek, neden?</th></tr><tr class="stg" data-s="2" data-e="9"><td><code>202 Accepted</code></td><td>"Olaylar Kafka'ya kalıcı yazıldı." Henüz toplama girmediler; o birkaç dakika sonra.</td></tr><tr class="stg" data-s="2" data-e="9"><td><code>{ "accepted": 500 }</code></td><td>Kaç olayın alındığı. Tekrar gelen olaylar burada ayıklanmaz; sayımda (ham veriden) ayıklanır.</td></tr></table></div><div class="stg" data-s="3" data-e="9" data-href="#u2"><pre>olay → Kafka (key = tenant_id) → ham depo (event_id'ye göre tekil)
+                                     ↓  5 dakikada bir
+                       son 3 günü yeniden hesapla → Postgres usage_daily
+
+-- sözde SQL
+SELECT tenant_id, day, model, sum(input_tokens), sum(output_tokens)
+FROM (SELECT DISTINCT ON (event_id) … FROM usage_events
+      WHERE occurred_at &gt;= now() - interval '3 days')
+GROUP BY tenant_id, day, model;</pre></div><div class="stg" data-s="3" data-e="9" data-href="#u4"><p class="small" style="margin:0">Toplamlar <b>artırılmaz, hesaplanır</b>. Tekrar gelen olay iki kez sayılmaz; geç gelen olay bir sonraki hesaplamada doğru güne girer.</p></div><div class="stg" data-s="4" data-e="9"><p class="small" style="margin:0"><b>Tek hata formatı:</b> sabit <code>code</code>, <code>message</code>, <code>request_id</code>, gerekirse <code>details</code>.</p></div><div class="table-wrap"><table><tr class="stg" data-s="4" data-e="9"><th>Kod</th><th>Ne zaman?</th></tr><tr class="stg" data-s="4" data-e="9"><td class="ex-toggle">400 <code>VALIDATION_FAILED</code></td><td>Batch'teki bir olay hatalı; hangisi olduğu <code>details</code>'te. Batch'in tamamı reddedilir.</td></tr><tr class="ex-row stg" data-s="4" data-e="9" hidden><td colspan="2"><pre>400 Bad Request
+{ "error": { "code": "VALIDATION_FAILED",
+             "message": "events[17].occurred_at is missing",
+             "request_id": "req_7b3…",
+             "details": { "index": 17, "field": "occurred_at" } } }</pre></td></tr><tr class="stg" data-s="4" data-e="9"><td class="ex-toggle">403 <code>FORBIDDEN</code></td><td data-href="#u5">Yazan bir iç servis değil.</td></tr><tr class="ex-row stg" data-s="4" data-e="9" hidden><td colspan="2"><pre>403 Forbidden
+{ "error": { "code": "FORBIDDEN",
+             "message": "Only internal services can write usage events",
+             "request_id": "req_7b3…" } }</pre></td></tr><tr class="stg" data-s="4" data-e="9"><td class="ex-toggle">413 <code>BATCH_TOO_LARGE</code></td><td>Batch 1.000 olaydan büyük.</td></tr><tr class="ex-row stg" data-s="4" data-e="9" hidden><td colspan="2"><pre>413 Payload Too Large
+{ "error": { "code": "BATCH_TOO_LARGE",
+             "message": "A batch can have at most 1000 events",
+             "request_id": "req_7b3…" } }</pre></td></tr><tr class="stg" data-s="4" data-e="9"><td class="ex-toggle">503 <code>UNAVAILABLE</code></td><td data-href="#u1">Kafka'ya yazılamıyor: işi kabul etmeyiz; çağıran tamponlar ve tekrar dener.</td></tr><tr class="ex-row stg" data-s="4" data-e="9" hidden><td colspan="2"><pre>503 Service Unavailable
+Retry-After: 5
+{ "error": { "code": "UNAVAILABLE",
+             "message": "Try again shortly",
+             "request_id": "req_7b3…" } }</pre></td></tr></table></div><div class="table-wrap"><table><tr class="stg" data-s="5" data-e="9"><th>Kural</th><th>Karar</th></tr><tr class="stg" data-s="5" data-e="9" data-href="#u2"><td>Tekrar</td><td>Aynı <code>event_id</code> bir kez sayılır (ham veriden hesaplarken tekilleştirilir).</td></tr><tr class="stg" data-s="5" data-e="9" data-href="#u3"><td>Zaman</td><td>Gün <code>occurred_at</code>'e göre; geç gelen olay doğru güne girer.</td></tr><tr class="stg" data-s="5" data-e="9" data-href="#u5"><td>Yetki</td><td>Yazma sadece iç servis; okuma müşteri token'ından, sadece kendi kullanımı.</td></tr><tr class="stg" data-s="5" data-e="9" data-href="#u4"><td>Fatura</td><td>Ay kapanışında ham veriden hesaplanır; toplam tablosu panel içindir.</td></tr></table></div></div>
+  <div class="stage-text"><div class="t"></div><div class="d"></div></div>
+  <div class="btns"><button class="btn" type="button" data-act="prev">← Önceki</button><button class="btn" type="button" data-act="next">Sonraki →</button><button class="btn" type="button" data-act="all">Hepsi</button></div>
+</div>
+<div class="say">Internal services send events in batches with an event id they generate; we only say 202 once they're in Kafka, and totals are recomputed from the raw events, so retries never double count.</div>
+<h2 id="cozum">3 · Minimum çözüm</h2>
+<div class="step-hint"><b>Playbook 3/5 · Minimum çözüm.</b> minimum tablolar ve akış. Çiz, sonra dur ve sor.</div>
+<div class="dm"><div class="dm-card"><div class="dm-kind">Kafka</div><pre><b>usage-events</b>
+  key: ten_42   (tenant_id)
+  value: { event_id, tenant_id, model,
+           input_tokens, output_tokens,
+           occurred_at }</pre></div><div class="dm-card"><div class="dm-kind">Ham depo (ClickHouse)</div><pre><b>usage_events</b>
+  event_id: task_7d2:call_3
+  tenant_id: ten_42
+  model: model-large
+  input_tokens: 8100
+  output_tokens: 420
+  occurred_at: 2026-11-24T09:12:03Z
+      ← gün bazında bölüm, 90 gün</pre></div><div class="dm-card"><div class="dm-kind">Postgres</div><pre><b>usage_daily</b>
+  tenant_id: ten_42
+  day: 2026-11-23
+  model: model-large
+  input_tokens: 12500000
+  output_tokens: 830000
+  computed_at: 09:10:00
+      ← PK (tenant_id, day, model)</pre></div><div class="dm-card"><div class="dm-kind">Postgres · 4. aşama</div><pre><b>billing_periods</b>
+  period: 2026-11
+  status: closed
+  closed_at: 2026-12-01T02:00:00Z</pre></div></div>
+<div class="diagram" id="diagUM" data-glossary="#" data-all="Üstte yazma yolu, sağda toplama, altta okuma.">
+  <div class="pills"></div>
+  <svg class="arch" viewBox="0 0 1050 410" role="img" aria-labelledby="diagUM-t diagUM-d"><title id="diagUM-t">Usage metering</title><desc id="diagUM-d">LLM gateway, Usage API, Kafka, ham depo, aggregator, Postgres, müşteri paneli ve faturalama; dört aşamada eklenir.</desc><defs>
+<marker id="diagUMm1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#AFA9EC" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<marker id="diagUMm2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#5DCAA5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<marker id="diagUMm3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#F0997B" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<marker id="diagUMm4" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#EF9F27" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<marker id="diagUMm5" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#ED93B1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+</defs>
+<g class="c-purple stg" data-s="1" data-e="9"><rect x="20" y="40" width="100" height="56" rx="6" stroke-width="0.6"/><text class="th" x="70" y="59" text-anchor="middle" dominant-baseline="central">LLM gateway</text><text class="ts" x="70" y="77" text-anchor="middle" dominant-baseline="central">usage events</text></g>
+<g class="c-purple stg" data-s="1" data-e="9" data-term="usage-api"><rect x="220" y="40" width="100" height="56" rx="6" stroke-width="0.6"/><text class="th" x="270" y="59" text-anchor="middle" dominant-baseline="central">Usage API</text><text class="ts" x="270" y="77" text-anchor="middle" dominant-baseline="central">ingest, batch</text></g>
+<g class="c-purple stg" data-s="1" data-e="9" data-term="kafka"><rect x="420" y="40" width="140" height="56" rx="6" stroke-width="0.6"/><text class="th" x="490" y="59" text-anchor="middle" dominant-baseline="central">Kafka topic</text><text class="ts" x="490" y="77" text-anchor="middle" dominant-baseline="central">usage-events</text></g>
+<g class="c-teal stg" data-s="2" data-e="9" data-term="raw-store"><rect x="660" y="40" width="150" height="56" rx="6" stroke-width="0.6"/><text class="th" x="735" y="59" text-anchor="middle" dominant-baseline="central">Raw store</text><text class="ts" x="735" y="77" text-anchor="middle" dominant-baseline="central">ClickHouse</text></g>
+<g class="c-teal stg" data-s="2" data-e="9" data-term="aggregator"><rect x="660" y="180" width="150" height="56" rx="6" stroke-width="0.6"/><text class="th" x="735" y="199" text-anchor="middle" dominant-baseline="central">Aggregator</text><text class="ts" x="735" y="217" text-anchor="middle" dominant-baseline="central">every 5 min</text></g>
+<g class="c-teal stg" data-s="2" data-e="9" data-term="postgres"><rect x="660" y="320" width="150" height="56" rx="6" stroke-width="0.6"/><text class="th" x="735" y="339" text-anchor="middle" dominant-baseline="central">Postgres</text><text class="ts" x="735" y="357" text-anchor="middle" dominant-baseline="central">daily totals</text></g>
+<g class="c-coral stg" data-s="3" data-e="9"><rect x="20" y="320" width="100" height="56" rx="6" stroke-width="0.6"/><text class="th" x="70" y="339" text-anchor="middle" dominant-baseline="central">Customer</text><text class="ts" x="70" y="357" text-anchor="middle" dominant-baseline="central">dashboard</text></g>
+<g class="c-coral stg" data-s="3" data-e="9" data-term="gateway"><rect x="220" y="320" width="100" height="56" rx="6" stroke-width="0.6"/><text class="th" x="270" y="339" text-anchor="middle" dominant-baseline="central">Gateway</text><text class="ts" x="270" y="357" text-anchor="middle" dominant-baseline="central">JWT → tenant</text></g>
+<g class="c-coral stg" data-s="3" data-e="9" data-term="usage-api"><rect x="420" y="320" width="140" height="56" rx="6" stroke-width="0.6"/><text class="th" x="490" y="339" text-anchor="middle" dominant-baseline="central">Query API</text><text class="ts" x="490" y="357" text-anchor="middle" dominant-baseline="central">GET /usage</text></g>
+<g class="c-amber stg" data-s="4" data-e="9" data-term="billing"><rect x="900" y="180" width="130" height="56" rx="6" stroke-width="0.6"/><text class="th" x="965" y="199" text-anchor="middle" dominant-baseline="central">Billing job</text><text class="ts" x="965" y="217" text-anchor="middle" dominant-baseline="central">month close</text></g>
+<g class="stg" data-s="1" data-e="9"><path d="M120 68 L218 68" stroke="#AFA9EC" stroke-width="1.6" fill="none" marker-end="url(#diagUMm1)"/><text class="al" x="170" y="60" text-anchor="middle" fill="#AFA9EC">1 · batch</text></g>
+<g class="stg" data-s="1" data-e="9"><path d="M320 68 L418 68" stroke="#AFA9EC" stroke-width="1.6" fill="none" marker-end="url(#diagUMm1)"/><text class="al" x="370" y="60" text-anchor="middle" fill="#AFA9EC">2 · produce</text></g>
+<g class="stg" data-s="2" data-e="9"><path d="M560 68 L658 68" stroke="#5DCAA5" stroke-width="1.6" fill="none" marker-end="url(#diagUMm2)"/><text class="al" x="610" y="60" text-anchor="middle" fill="#5DCAA5">3 · sink</text></g>
+<g class="stg" data-s="2" data-e="9"><path d="M735 96 L735 178" stroke="#5DCAA5" stroke-width="1.6" fill="none" marker-end="url(#diagUMm2)"/><text class="al" x="742" y="142" text-anchor="start" fill="#5DCAA5">4 · query</text></g>
+<g class="stg" data-s="2" data-e="9"><path d="M735 236 L735 318" stroke="#5DCAA5" stroke-width="1.6" fill="none" marker-end="url(#diagUMm2)"/><text class="al" x="742" y="282" text-anchor="start" fill="#5DCAA5">5 · upsert</text></g>
+<g class="stg" data-s="3" data-e="9"><path d="M120 348 L218 348" stroke="#F0997B" stroke-width="1.6" fill="none" marker-end="url(#diagUMm3)"/><text class="al" x="170" y="340" text-anchor="middle" fill="#F0997B">6 · GET</text></g>
+<g class="stg" data-s="3" data-e="9"><path d="M320 348 L418 348" stroke="#F0997B" stroke-width="1.6" fill="none" marker-end="url(#diagUMm3)"/><text class="al" x="370" y="340" text-anchor="middle" fill="#F0997B">7 · tenant</text></g>
+<g class="stg" data-s="3" data-e="9"><path d="M560 348 L658 348" stroke="#F0997B" stroke-width="1.6" fill="none" marker-end="url(#diagUMm3)"/><text class="al" x="610" y="340" text-anchor="middle" fill="#F0997B">8 · read</text></g>
+<g class="stg" data-s="4" data-e="9"><path d="M810 68 L965 68 L965 178" stroke="#EF9F27" stroke-width="1.6" fill="none" marker-end="url(#diagUMm4)"/><text class="al" x="958" y="130" text-anchor="end" fill="#EF9F27">9 · month close</text></g>
+</svg>
+  <div class="stage-text"><div class="t"></div><div class="d"></div></div>
+  <div class="btns"><button class="btn" type="button" data-act="prev">← Önceki</button><button class="btn" type="button" data-act="next">Sonraki →</button><button class="btn" type="button" data-act="all">Hepsi</button></div>
+</div>
+<details class="note arrows" open><summary><b>Okların açıklaması</b></summary><div class="table-wrap"><table><tr><th>No</th><th>Nereden → nereye</th><th>Ne yapar?</th></tr><tr><td style="white-space:nowrap"><span class="dot" style="background:#AFA9EC"></span><b>1</b></td><td style="white-space:nowrap">LLM gateway → Usage API</td><td>Saniyede bir ya da 500 olayda bir toplu <code>POST</code>; asenkron, model çağrısını bekletmez.</td></tr><tr><td style="white-space:nowrap"><span class="dot" style="background:#AFA9EC"></span><b>2</b></td><td style="white-space:nowrap">Usage API → Kafka</td><td>Olaylar Kafka'ya yazılır (key = <code>tenant_id</code>); onay gelince 202.</td></tr><tr><td style="white-space:nowrap"><span class="dot" style="background:#5DCAA5"></span><b>3</b></td><td style="white-space:nowrap">Kafka → Raw store</td><td>Olaylar toplu halde sütun tabanlı depoya yazılır; gün bazında bölümlenir.</td></tr><tr><td style="white-space:nowrap"><span class="dot" style="background:#5DCAA5"></span><b>4</b></td><td style="white-space:nowrap">Raw store → Aggregator</td><td>5 dakikada bir son 3 günü <code>event_id</code>'ye göre tekilleştirip toplar.</td></tr><tr><td style="white-space:nowrap"><span class="dot" style="background:#5DCAA5"></span><b>5</b></td><td style="white-space:nowrap">Aggregator → Postgres</td><td><code>usage_daily</code> satırlarını yazar: (tenant, gün, model) başına bir satır.</td></tr><tr><td style="white-space:nowrap"><span class="dot" style="background:#F0997B"></span><b>6</b></td><td style="white-space:nowrap">Customer → Gateway</td><td><code>GET /v1/usage?group_by=day,model</code></td></tr><tr><td style="white-space:nowrap"><span class="dot" style="background:#F0997B"></span><b>7</b></td><td style="white-space:nowrap">Gateway → Query API</td><td>JWT doğrulandı; tenant token'dan.</td></tr><tr><td style="white-space:nowrap"><span class="dot" style="background:#F0997B"></span><b>8</b></td><td style="white-space:nowrap">Query API → Postgres</td><td>Küçük toplam tablosundan okur; ham veriye dokunmaz.</td></tr><tr><td style="white-space:nowrap"><span class="dot" style="background:#EF9F27"></span><b>9</b></td><td style="white-space:nowrap">Raw store → Billing job</td><td>Ay kapanışında fatura ham veriden yeniden hesaplanır; panelin toplamına güvenilmez.</td></tr></table></div></details>
+<div class="say">This is the simplest version that works: events land in Kafka before we say 202, raw events go to a columnar store, and small totals are recomputed from them every few minutes. Where would you like me to go deeper?</div>
+<h2 id="hata">4 · Hata ve güvenlik</h2>
+<div class="step-hint"><b>Playbook 4/5 · Hata ve güvenlik.</b> her cevap: karar → gerekçe → bedel.</div>
+<div class="table-wrap"><table><tr><th>Soru</th><th>Karar</th><th>Gerekçe</th><th>Bedel / alternatif</th></tr><tr id="u1"><td><b>What must be saved before returning 202?</b></td><td>Batch Kafka'ya yazılmış ve onaylanmış olmalı (tüm replikalar). Yazılamıyorsa 503; LLM gateway olayları diske tamponlar ve tekrar gönderir.</td><td>202 "kaybolmayacak" sözüdür; kaybolan olay kaybolan para demek.</td><td>Kafka çökerse yazma durur; çağıran tarafta disk tamponu gerekir.</td></tr><tr id="u2"><td><b>What if the same event arrives twice?</b></td><td><code>event_id</code>'yi olayı üreten taraf verir (ör. task + çağrı numarası). Toplamlar ham veriden <code>event_id</code>'ye göre tekilleştirilerek hesaplandığı için iki kez sayılmaz.</td><td>Retry kaçınılmaz; fatura asla iki kez saymamalı.</td><td>Tekilleştirme sorgusu biraz pahalı; <code>event_id</code> üretimi disiplin ister.</td></tr><tr id="u3"><td><b>What about late events?</b></td><td>Gün <code>occurred_at</code>'e göre. Aggregator her seferinde son 3 günü baştan hesaplar. Ay kapandıktan sonra gelen olay sonraki faturaya düzeltme satırı olur.</td><td>Retry'lar ve kesintiler olayları saatlerce geciktirebilir.</td><td>Son 3 günü tekrar tekrar hesaplamak.</td></tr><tr id="u4"><td><b>Why not just increment a counter per event?</b></td><td>Sayaç artırma idempotent değil: tekrar gelen olay iki kez sayılır, kaybolan bir artırma geri getirilemez. Ham veriden hesaplamak doğruyu her zaman geri getirir.</td><td>Doğruluk, birkaç dakikalık tazelikten daha önemli.</td><td>Panel birkaç dakika gecikir. Gerçek zamanlı yaklaşık sayaç sadece bütçe kontrolü için (follow-up).</td></tr><tr id="u5"><td><b>Who may write and who may read?</b></td><td>Yazma sadece iç servis kimliğiyle (servis token'ı ya da mTLS). Okuma müşteri token'ından, sadece kendi tenant'ı.</td><td>Müşteri kendi kullanımını yazabilseydi faturasını değiştirebilirdi.</td><td>İç servis kimliği altyapısı gerekir.</td></tr><tr id="u6"><td><b>Recording usage must not slow the model call.</b></td><td>LLM gateway olayları bellekte toplar, saniyede bir ya da 500 olayda bir arka planda gönderir; başarısızsa yerel diske yazar.</td><td>Kullanım kaydı yan iş; kullanıcıyı bekletmemeli.</td><td>Pod ani ölürse diske yazılmamış son ~1 saniye kaybolabilir; kritikse önce diske yaz.</td></tr><tr id="u7"><td><b>How do we know it's healthy?</b></td><td>Kabul edilen ile ham depoya yazılan olay sayısının farkı (kayıp alarmı), Kafka gecikmesi, toplamların yaşı (<code>as_of</code>), tekrar oranı.</td><td>Asıl risk sessiz kayıp; sayıları karşılaştırmak onu yakalar.</td><td>Sayaçları iki uçta tutmak.</td></tr></table></div>
+<h2 id="olcek">5 · Ölçek ve follow-up</h2>
+<div class="step-hint"><b>Playbook 5/5 · Ölçek ve follow-up.</b> önce darboğazı adlandır, sonra parçayı ekle.</div>
+<p class="small muted">Önce soruyu oku, 20 saniyede kendi cevabını sesli söyle, sonra aç.</p>
+<details class="term qa"><summary><b>1.</b> Customers want a hard budget: stop when they reach it.</summary>
+<p class="small muted" style="margin:8px 0 4px">Ana fikir: Gerçek zamanlı yaklaşık sayaç Redis'te, LLM gateway kontrol eder; fatura yine ham veriden. İki sayı biraz farklı olabilir, bunu söyle.</p>
+<div class="say">For a hard budget I need something real-time, so the LLM gateway keeps an approximate counter in Redis and blocks when it's over. Billing still comes from the raw events. The two numbers can differ slightly, and I'd say that openly.</div>
+</details>
+<details class="term qa"><summary><b>2.</b> Raw events grow by 350 GB a day.</summary>
+<p class="small muted" style="margin:8px 0 4px">Ana fikir: Sütun tabanlı sıkıştırma (~10 kat), gün bazında bölüm, 90 gün sonra ucuz depoya (Parquet), toplamlar sonsuza.</p>
+<div class="say">Columnar storage compresses this about ten times, the table is partitioned by day, and after 90 days old partitions move to cheap object storage as Parquet. The daily totals stay forever.</div>
+</details>
+<details class="term qa"><summary><b>3.</b> A customer disputes their invoice.</summary>
+<p class="small muted" style="margin:8px 0 4px">Ana fikir: Fatura satırından ham olaylara kadar izlenebilirlik; müşteriye ham olay dışa aktarımı.</p>
+<div class="say">Every invoice line can be traced back to raw events, and the customer can export them, so we can show exactly which calls were counted.</div>
+</details>
+<details class="term qa"><summary><b>4.</b> Why Kafka here?</summary>
+<p class="small muted" style="margin:8px 0 4px">Ana fikir: 20k olay/sn ve tepe; API ile depo ayrı ölçeklenir; depo yavaşlarsa olaylar Kafka'da bekler; yeniden hesaplama için tekrar okunabilir.</p>
+<div class="say">At twenty thousand events a second with spikes, Kafka lets the API accept quickly while the store writes in large batches, buffers events if the store is slow, and lets us replay them if we need to rebuild.</div>
+</details>
+<h2 id="parcalar">Parçalar</h2>
+<p class="small muted">Diyagramdaki kutuya tıklayınca buraya gelirsin: her parça için hangi problemi çözdüğü, neden şimdi gerektiği ve daha basit alternatifi.</p>
+<section class="term" id="p-usage-api"><h3>Usage API (yazma ve okuma) <a class="anchor" href="#p-usage-api">#</a></h3><p>Yazma tarafı: toplu olayları doğrular, Kafka'ya yazar. Okuma tarafı (Query API): toplam tablosundan okur.</p><div class="decide"><div><b>Hangi problemi çözüyor?</b> Olayları hızlı ve güvenli kabul etmek; müşteriye tek bir okuma sözleşmesi vermek.</div><div><b>Neden şimdi?</b> 1. aşama.</div><div><b>Daha basit alternatif:</b> Her servisin doğrudan veritabanına yazması.</div><div><b>Bedeli:</b> Bir servis daha; ama yazma ve okuma ayrı ölçeklenir.</div></div></section>
+<section class="term" id="p-kafka"><h3>Kafka topic <a class="anchor" href="#p-kafka">#</a></h3><p>Kabul edilen olayların kalıcı tamponu.</p><div class="decide"><div><b>Hangi problemi çözüyor?</b> Ani yükü emmek, API'yi depodan ayırmak, gerektiğinde tekrar okumak.</div><div><b>Neden şimdi?</b> 1. aşama: hacim baştan yüksek.</div><div><b>Daha basit alternatif:</b> API'nin doğrudan ham depoya yazması (depo yavaşlarsa API de yavaşlar).</div><div><b>Bedeli:</b> İşletme yükü.</div></div></section>
+<section class="term" id="p-raw-store"><h3>Ham depo (ClickHouse / BigQuery) <a class="anchor" href="#p-raw-store">#</a></h3><p>Her olay bir satır; sütun tabanlı, sıkıştırılmış, gün bazında bölümlü.</p><div class="decide"><div><b>Hangi problemi çözüyor?</b> Günde 350 GB'ı ucuza saklamak ve hızla toplamak.</div><div><b>Neden şimdi?</b> 2. aşama.</div><div><b>Daha basit alternatif:</b> Postgres (bu hacimde zorlanır).</div><div><b>Bedeli:</b> Bir veri sistemi daha; güncelleme ve silme pahalı.</div></div></section>
+<section class="term" id="p-aggregator"><h3>Aggregator <a class="anchor" href="#p-aggregator">#</a></h3><p>5 dakikada bir son 3 günü tekilleştirip toplayan iş.</p><div class="decide"><div><b>Hangi problemi çözüyor?</b> Tekrar ve geç gelen olaylara rağmen doğru toplamlar.</div><div><b>Neden şimdi?</b> 2. aşama.</div><div><b>Daha basit alternatif:</b> Olay başına sayaç artırmak (iki kez sayar).</div><div><b>Bedeli:</b> Panel birkaç dakika gecikmeli.</div></div></section>
+<section class="term" id="p-postgres"><h3>Postgres <a class="anchor" href="#p-postgres">#</a></h3><p>Küçük günlük toplam tablosu ve fatura dönemleri.</p><div class="decide"><div><b>Hangi problemi çözüyor?</b> Panelin hızlı ve ucuz okuması.</div><div><b>Neden şimdi?</b> 2. aşama.</div><div><b>Daha basit alternatif:</b> Paneli doğrudan ham depodan beslemek (her açılışta pahalı sorgu).</div><div><b>Bedeli:</b> İki yerde veri; toplam her zaman ham veriden yeniden üretilebilir.</div></div></section>
+<section class="term" id="p-gateway"><h3>Gateway <a class="anchor" href="#p-gateway">#</a></h3><p>Müşteri isteklerinde JWT'yi doğrular; tenant token'dan.</p><div class="decide"><div><b>Hangi problemi çözüyor?</b> Müşteri sadece kendi kullanımını görsün.</div><div><b>Neden şimdi?</b> 3. aşama.</div><div><b>Daha basit alternatif:</b> Query API'nin kendi doğrulaması.</div><div><b>Bedeli:</b> Bir ağ adımı daha.</div></div></section>
+<section class="term" id="p-billing"><h3>Billing job <a class="anchor" href="#p-billing">#</a></h3><p>Ay kapanışında faturayı ham veriden hesaplayan iş.</p><div class="decide"><div><b>Hangi problemi çözüyor?</b> Faturanın panelin toplamına değil, ham veriye dayanması.</div><div><b>Neden şimdi?</b> Follow-up.</div><div><b>Daha basit alternatif:</b> Panelin toplamını faturaya yazmak.</div><div><b>Bedeli:</b> Ay sonunda büyük bir sorgu.</div></div></section>
+<nav class="pager"><a href="../index.html">← Ana sayfa</a><a href="api-keys.html">API key yönetimi →</a></nav>
+</main>
+<footer>Kişisel çalışma notları. Senaryolar alıştırma amaçlıdır; şirket adları anonimleştirilmiştir.</footer>
+<script>initStepper("apiUM", [{"n": "1 · Endpoint'ler", "c": "#AFA9EC", "d": "Yazma tarafı (iç, toplu) ve okuma tarafı (müşteri paneli, fatura)."}, {"n": "2 · Tek tam istek", "c": "#5DCAA5", "d": "En önemli istek: toplu olay gönderme. event_id ve occurred_at neden orada?"}, {"n": "3 · Toplamlar", "c": "#F0997B", "d": "Toplamlar nasıl hesaplanır: artırma değil, ham veriden hesaplama."}, {"n": "4 · Hatalar", "c": "#EF9F27", "d": "Tek hata formatı; en önemlisi 503 (işi kabul edemiyorsak etmeyiz)."}, {"n": "5 · Kurallar", "c": "#ED93B1", "d": "Dört kural, tek cümleyle."}]);</script><script>initStepper("diagUM", [{"n": "1 · Kabul", "c": "#AFA9EC", "d": "LLM gateway olayları toplu gönderir (ok 1); Usage API onları Kafka'ya yazar ve onay gelince 202 döner (ok 2). Kafka'ya yazılamıyorsa kabul etmez."}, {"n": "2 · Saklama ve toplama", "c": "#5DCAA5", "d": "Olaylar ham depoya akar (ok 3). Aggregator 5 dakikada bir son 3 günü tekilleştirip toplar (ok 4) ve Postgres'teki günlük toplamları yazar (ok 5). Artırma yok, hesaplama var."}, {"n": "3 · Okuma", "c": "#F0997B", "d": "Müşteri paneli (ok 6–7) küçük toplam tablosundan okur (ok 8). Cevapta <code>as_of</code> var: toplam en fazla birkaç dakika eski."}, {"n": "4 · Follow-up: fatura", "c": "#EF9F27", "d": "<b>Sorulursa ekle.</b> Ay kapanışında fatura ham veriden yeniden hesaplanır (ok 9). Kapanıştan sonra gelen olay sonraki faturaya düzeltme satırı olur."}]);</script>
+</body>
+</html>

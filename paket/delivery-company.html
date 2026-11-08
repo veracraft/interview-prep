@@ -1,0 +1,1046 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Delivery Company · Code Craft paketi</title>
+<link rel="stylesheet" href="print.css">
+<style>
+@media screen {
+  body { background: #3f444b; }
+  .page { background: #ece9e1; max-width: 210mm; margin: 14px auto; padding: 11mm 12mm; box-shadow: 0 1px 6px rgba(0,0,0,.35); }
+  .backbar { max-width: 210mm; margin: 0 auto; padding: 12px 4px 0; font: 14px -apple-system, Helvetica, Arial, sans-serif; display: flex; gap: 14px; flex-wrap: wrap; }
+  .backbar a { color: #a9cdf2; text-decoration: none; }
+  .backbar span { color: #d2cfc7 !important; }
+}
+@media screen and (max-width: 820px) {
+  .page { padding: 14px; margin: 10px 8px; }
+  .cols, .cols3 { grid-template-columns: 1fr !important; }
+  .timeline { flex-wrap: wrap; }
+  pre { overflow-x: auto; white-space: pre; }
+  table { display: block; overflow-x: auto; }
+}
+@media print { .backbar { display: none; } }
+</style>
+</head>
+<body>
+<div class="backbar"><a href="../index.html">← Ana sayfa</a><a href="../pdf/delivery-company.pdf">PDF indir</a><span style="color:#888">A4, gerçek boyut, çift taraflı yazdır.</span></div>
+<section class="page cover">
+  <div class="ph"><span class="t">Delivery Company · Grocery &amp; Retail · Senior Backend Engineer</span><span class="n">1 / 14 · Format</span></div>
+  <h1>Round 1 · Code Craft Challenge</h1>
+  <div class="sub">60 dk · HackerRank CodePair · Go · kamera açık, ekran paylaşımı · <b>AI kullanımı yasak</b></div>
+
+  <div class="timeline">
+    <div class="done"><b>0-5 dk</b>Tanışma</div>
+    <div class="now" style="flex:4"><b>5-50 dk · 45 dk kodlama</b>Business problem, parça parça gelir. LeetCode değil, çalışan bir çözüm.</div>
+    <div class="done"><b>50-60 dk</b>Sorular + tartışma</div>
+  </div>
+
+  <div class="cols">
+  <div>
+    <h2>Prep kit'e göre neye bakıyorlar</h2>
+    <ul>
+      <li><b>Problem Solving:</b> belirsiz problemi nasıl ele alıyorsun? İlk seferde mükemmel değil, <b>iterasyonla</b> ilerleme.</li>
+      <li><b>Communication:</b> düşünceni anlatma, geri bildirim alıp yön değiştirme. Kod çalışmıyorsa bile iletişim.</li>
+      <li><b>Code Clarity:</b> temiz, düzenli, doğru sözdizimli kod. <b>Test ettin mi, debug ettin mi?</b></li>
+      <li>Puanlanan konular: maintainability, readability, <b>testability</b>, scalability, <b>failure handling</b>, <b>API design &amp; development</b>, <b>OOP ve design pattern'ler</b>.</li>
+    </ul>
+    <h2>Recruiter notların (özet)</h2>
+    <ul>
+      <li>Algoritma yok, <b>çalışan çözüm</b> bekleniyor. Hands-on yaklaşım.</li>
+      <li>Business problem içine paketlenmiş: muhtemelen stok, satın alma, depo, fiyat gibi grocery &amp; retail konuları.</li>
+      <li>"Bazen Google'a izin veriliyor": pkg.go.dev bakmak için sor. <b>AI asistan yok.</b></li>
+      <li>Ekip: 5-8 kişi, cross-functional, cross-location. Go ağırlıklı, şirket geneli Kotlin/Python/Scala.</li>
+    </ul>
+  </div>
+  <div>
+    <h2>İpuçları (prep kit)</h2>
+    <ul>
+      <li><b>Hemen kod yazma.</b> Problemi anlamaya zaman ayır.</li>
+      <li>Çok <b>interaktif</b> olacak: netleştirme soruları sormak puan kazandırır.</li>
+      <li>Takılırsan yaklaşımını ve gerekçeni anlat → ipucu almanı sağlar.</li>
+    </ul>
+    <h2>Lojistik</h2>
+    <ul class="check small">
+      <li>Mülakatçı: bir Software Engineer + 1-2 gözlemci olabilir.</li>
+      <li>Tarih/saat: davetteki tarihi ve CET saatini <b>teyit et</b> (yeniden planlandıysa yeni davete bak).</li>
+      <li>Kamera açık, tüm ekranı paylaşmaya hazır ol. Copilot / AI eklentilerini <b>kapat</b>, gereksiz pencereleri kapat.</li>
+      <li>HackerRank'te Go seç; <code>package main</code>, stdlib. Bir kez "Run" deneyip çıktı formatını gör.</li>
+      <li>Kağıt + kalem: veri modeli ve soru listesi için.</li>
+    </ul>
+    <h2>Round 2 önizleme (geçersen, tek günde 4 × 1 saat)</h2>
+    <table class="small">
+      <tr><td><b>AI builder</b></td><td>Kendi AI kurulumunla (Claude Code vb.) süreli bir görevi bitir. Nasıl yönlendirdiğine, doğruladığına bakıyorlar. Kod mükemmel değil, <b>tamam</b> olsun.</td></tr>
+      <tr><td><b>Debugging</b></td><td>Bir POC'yi oku, ne yaptığını anla, hataları düzelt, çalışır hale getir.</td></tr>
+      <tr><td><b>System design</b></td><td>Klasik whiteboard. (AI Company paketindeki kalıplar burada da işe yarar.)</td></tr>
+      <tr><td><b>Hiring manager</b></td><td>Engineering values, bireysel katkı, geçmişten örnekler, STAR.</td></tr>
+    </table>
+  </div>
+  </div>
+  <div class="tip"><b>Hedef:</b> 45 dakikada <b>Part 1 + 2'yi temiz</b> bitirmek iyi sonuç; Part 3 çok iyi; Part 4 bonus. Puan; bitirmekten çok <b>nasıl düşündüğün, nasıl iletişim kurduğun ve kodun kalitesi</b> üzerinden geliyor. Elindeki 4 mock (inventory, purchase orders, pricing, stock events) bu formatın birebir simülasyonu. Bu paket onları <b>tamamlıyor</b>: Go hafıza kartları (s. 3-5), ısınma ve aggregator (s. 6-7), kağıt drill'leri (s. 8-11) ve cevapları (s. 12-13).</div>
+</section>
+
+
+<section class="page">
+  <div class="ph"><span class="t">45 dakikanın akışı ve söylenecekler</span><span class="n">2 / 14 · Akış</span></div>
+  <table>
+    <tr><th style="width:12%">Dakika</th><th style="width:18%">Adım</th><th>Ne yap</th><th style="width:36%">Ne söyle</th></tr>
+    <tr><td>0-4</td><td>Anla</td><td>Problemi kendi cümlelerinle özetle. 3-6 netleştirme sorusu. Varsayımları <b>yaz</b> (kodun en üstüne yorum olarak).</td><td class="say">Let me repeat it back to make sure I got it right… A few questions before I start.</td></tr>
+    <tr><td>4-7</td><td>Tasarla</td><td>Tipler, ana struct, metod imzaları, hatalar. 30 sn'de veri modelini anlat.</td><td class="say">I'll model it like this: a Service struct that owns the state, typed IDs, sentinel errors. In-memory first.</td></tr>
+    <tr><td>7-20</td><td>Part 1</td><td>Validasyon → kontrol → uygula. <code>main()</code>'de 3-4 senaryo, Run.</td><td class="say">I'm validating everything first so a failure never leaves half-applied state.</td></tr>
+    <tr><td>20-32</td><td>Part 2</td><td>Yeni gereksinim. Önce mevcut tasarıma nasıl oturduğunu söyle, sonra kod.</td><td class="say">This fits nicely if I extract X into its own type…</td></tr>
+    <tr><td>32-42</td><td>Part 3</td><td>Genişletilebilirlik (interface/strategy), zaman, eşzamanlılık.</td><td class="say">Rules will keep changing, so I'll put them behind a small interface.</td></tr>
+    <tr><td>42-45</td><td>Toparla</td><td>Son Run, edge case'leri göster, kalanları söyle.</td><td class="say">With more time I'd add table-driven tests for… and persist this in Postgres.</td></tr>
+    <tr><td>+10</td><td>Tartışma</td><td colspan="2">Production'a nasıl taşınır? Eşzamanlılık, DB, Kafka event'leri, izleme, ölçek. (Sayfa 5'te cevap bankası.)</td></tr>
+  </table>
+
+  <div class="cols">
+  <div>
+    <h3>Business problem'de evrensel netleştirme soruları</h3>
+    <ol class="small">
+      <li><b>Girdi validasyonu:</b> negatif/sıfır miktar, boş ID, bilinmeyen SKU → hata mı, yok saymak mı?</li>
+      <li><b>Tekrar eden istek:</b> aynı ID ile tekrar gelirse? Aynı içerik → başarı, farklı içerik → conflict?</li>
+      <li><b>Kısmi başarı:</b> ya hep ya hiç mi? Yoksa kısmi + rapor mu?</li>
+      <li><b>Sıralama / eşitlik:</b> çıktı hangi sırada? Eşitlikte kural ne? (determinizm)</li>
+      <li><b>Zaman:</b> süre dolması, timezone, "şimdi" kimden gelir? (Clock enjekte)</li>
+      <li><b>Para:</b> hangi para birimi, yuvarlama kuralı? (integer cents)</li>
+      <li><b>Durumlar:</b> hangi geçişler geçerli? İptal edilmiş bir şey tekrar açılır mı?</li>
+      <li><b>Ölçek / eşzamanlılık:</b> tek process mi, birden çok goroutine çağırır mı?</li>
+      <li><b>Hata türü:</b> çağıran hatayı nasıl ayırt edecek? (sentinel / typed error)</li>
+    </ol>
+  </div>
+  <div>
+    <h3>İletişim cümleleri</h3>
+    <p class="small say">I'll start with the simplest version that works and then iterate.</p>
+    <p class="small say">I'm making an assumption here: X. If that's wrong it's an easy change because…</p>
+    <p class="small say">Let me run it quickly before moving on.</p>
+    <p class="small say">That output isn't what I expected. Let me read it… I think the bug is in the ordering, because…</p>
+    <p class="small say">I'm choosing a map keyed by store and SKU because every operation looks up by both.</p>
+    <p class="small say">I'll return a copy here so callers can't mutate our internal state.</p>
+    <p class="small say">I'd normally write this as a table-driven test; given the time I'll put a few checks in main.</p>
+    <p class="small say">Good catch, thanks. Let me fix that.</p>
+    <h3>Takılırsan (sessiz kalma!)</h3>
+    <ol class="small">
+      <li>Ne yapmaya çalıştığını söyle.</li>
+      <li>Basit bir örnekle elle izle (sayılarla).</li>
+      <li>Basitleştir: önce O(n) tarama, sonra optimize.</li>
+      <li>"Do you have a preference between A and B?" diye sormak serbest.</li>
+    </ol>
+    <div class="warn small">Sözdizimi hatası olursa panik yok: derleyici mesajını sesli oku, düzelt. Bu da "debug ettin mi?" puanı.</div>
+  </div>
+  </div>
+</section>
+
+
+<section class="page">
+  <div class="ph"><span class="t">Go tek dosya iskeleti (ezberle, 3 dakikada yaz)</span><span class="n">3 / 14 · Go</span></div>
+  <div class="cols">
+  <div>
+<pre style="font-size:7.1pt;line-height:1.2">package main
+
+import (
+	"errors"
+	"fmt"
+	"sort"
+	"sync"
+	"time"
+)
+
+// Assumptions (agreed with interviewer):
+// - in-memory, single process; methods are safe for concurrent use
+// - quantities are ints > 0; money is int64 cents
+
+// ---------- domain types ----------
+type (
+	SKU     string
+	StoreID string
+	OrderID string
+)
+
+type Status string
+
+const (
+	StatusOpen      Status = "OPEN"
+	StatusDone      Status = "DONE"
+	StatusCancelled Status = "CANCELLED"
+)
+
+// one place for valid transitions
+var transitions = map[Status][]Status{
+	StatusOpen: {StatusDone, StatusCancelled},
+}
+
+func canMove(from, to Status) bool {
+	for _, s := range transitions[from] {
+		if s == to {
+			return true
+		}
+	}
+	return false
+}
+
+// ---------- errors ----------
+var (
+	ErrInvalidArgument = errors.New("invalid argument")
+	ErrNotFound        = errors.New("not found")
+	ErrConflict        = errors.New("conflict")
+	ErrInvalidState    = errors.New("invalid state")
+)
+
+type ShortageError struct {
+	SKU                  SKU
+	Requested, Available int
+}
+
+func (e *ShortageError) Error() string {
+	return fmt.Sprintf("shortage %s: requested %d, available %d", e.SKU, e.Requested, e.Available)
+}
+
+// ---------- time is injected ----------
+type Clock interface{ Now() time.Time }
+type realClock struct{}
+
+func (realClock) Now() time.Time { return time.Now() }
+
+type fakeClock struct{ t time.Time }
+
+func (f *fakeClock) Now() time.Time          { return f.t }
+func (f *fakeClock) Advance(d time.Duration) { f.t = f.t.Add(d) }</pre>
+  </div>
+  <div>
+<pre style="font-size:7.1pt;line-height:1.2">// ---------- service ----------
+type Service struct {
+	mu    sync.Mutex
+	clock Clock
+	stock map[StoreID]map[SKU]int
+	// orders map[OrderID]*order ...
+}
+
+func NewService(c Clock) *Service {
+	if c == nil {
+		c = realClock{}
+	}
+	return &amp;Service{clock: c, stock: map[StoreID]map[SKU]int{}}
+}
+
+func (s *Service) Receive(store StoreID, sku SKU, qty int) error {
+	if store == "" || sku == "" || qty &lt;= 0 {
+		return fmt.Errorf("%w: store=%q sku=%q qty=%d",
+			ErrInvalidArgument, store, sku, qty)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.stock[store] == nil {
+		s.stock[store] = map[SKU]int{}
+	}
+	s.stock[store][sku] += qty
+	return nil
+}
+
+// deterministic output: sort keys
+func (s *Service) Snapshot(store StoreID) []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	skus := make([]SKU, 0, len(s.stock[store]))
+	for k := range s.stock[store] {
+		skus = append(skus, k)
+	}
+	sort.Slice(skus, func(i, j int) bool { return skus[i] &lt; skus[j] })
+	out := make([]string, 0, len(skus))
+	for _, k := range skus {
+		out = append(out, fmt.Sprintf("%s=%d", k, s.stock[store][k]))
+	}
+	return out
+}
+
+// ---------- demo + mini tests ----------
+func check(name string, ok bool) {
+	if ok {
+		fmt.Println("PASS", name)
+	} else {
+		fmt.Println("FAIL", name)
+	}
+}
+
+func main() {
+	clk := &amp;fakeClock{t: time.Date(2026, 11, 3,
+		12, 0, 0, 0, time.UTC)}
+	s := NewService(clk)
+
+	err := s.Receive("hel-1", "milk", 0)
+	check("zero qty rejected",
+		errors.Is(err, ErrInvalidArgument))
+
+	check("receive ok",
+		s.Receive("hel-1", "milk", 5) == nil)
+	fmt.Println(s.Snapshot("hel-1"))
+
+	// typed error example:
+	var se *ShortageError
+	err = fmt.Errorf("reserve: %w",
+		&amp;ShortageError{"milk", 9, 5})
+	check("errors.As works", errors.As(err, &amp;se) &amp;&amp;
+		se.Available == 5)
+}</pre>
+  </div>
+  </div>
+  <div class="tip small"><b>Neden bu iskelet?</b> Mülakatçıya ilk 3 dakikada şunu gösterir: tipli ID'ler, tek yerde durum geçişleri, sentinel + typed error, enjekte edilen zaman, mutex, deterministik çıktı ve <b>kendi testini yazma alışkanlığı</b>. Hepsi rubrikteki "testability, failure handling, readability". <b>Ama hepsini baştan yazma:</b> önce map + küçük struct ile çalışan ilk dilim; <code>Clock</code>'u zaman gereksinimi gelince, mutex'i eşzamanlılık istenince, interface'i test veya genişleme gerektirince ekle. İlk 10 dakikayı iskelete harcama.</div>
+</section>
+
+
+<section class="page">
+  <div class="ph"><span class="t">Go hafıza kartları (internet yokken tekrar et)</span><span class="n">4 / 14 · Go</span></div>
+  <div class="cols">
+  <div>
+    <h3>Hatalar</h3>
+<pre>var ErrX = errors.New("x")                 // sentinel
+return fmt.Errorf("%w: sku %s", ErrX, sku)  // wrap + context
+errors.Is(err, ErrX)                        // zincirde ara
+var se *ShortageError
+errors.As(err, &amp;se)                         // tipe çevir
+
+// typed error'ı sentinel ile eşleştirmek:
+func (e *ShortageError) Is(t error) bool { return t == ErrInsufficientStock }
+// veya: func (e *ValidationError) Unwrap() error { return ErrRuleViolation }
+// birden fazla: errors.Join(err1, err2)   (Go 1.20+)</pre>
+    <h3>Map'ler</h3>
+<pre>m := map[SKU]int{}            // nil map'e yazma → panic!
+v, ok := m[k]                 // comma-ok
+delete(m, k)
+// iç içe map: önce nil kontrolü
+if s.stock[st] == nil { s.stock[st] = map[SKU]int{} }
+// composite key alternatif:
+type key struct{ Store StoreID; SKU SKU }
+m2 := map[key]int{}; m2[key{"hel-1","milk"}]++
+// iterasyon sırası RASTGELE → sırala</pre>
+    <h3>Slice'lar ve sıralama</h3>
+<pre>out := make([]T, 0, len(in))
+cp := append([]T(nil), s...)       // kopya (veya slices.Clone)
+sort.Slice(xs, func(i, j int) bool {
+    if xs[i].Expiry.Equal(xs[j].Expiry) { return xs[i].ID &lt; xs[j].ID }
+    return xs[i].Expiry.Before(xs[j].Expiry)
+})
+// Go 1.21+:
+slices.SortFunc(xs, func(a, b Lot) int {
+    if c := a.Expiry.Compare(b.Expiry); c != 0 { return c }
+    return cmp.Compare(a.ID, b.ID)
+})
+slices.Contains(xs, v);  min(a, b);  max(a, b)
+// for range içinde eleman KOPYA: pointer gerekiyorsa
+for i := range xs { xs[i].Qty-- }</pre>
+    <h3>Zaman</h3>
+<pre>d := 15 * time.Minute
+deadline := now.Add(d);  now.After(deadline);  t2.Sub(t1) // Duration
+y, w := t.ISOWeek()      // haftalık limitler
+t.Truncate(24*time.Hour) // UTC gün başı (yerel saatte dikkat!)
+loc, _ := time.LoadLocation("Europe/Helsinki"); t.In(loc)
+d.Hours()  // float64</pre>
+  </div>
+  <div>
+    <h3>Para</h3>
+<pre>type Cents int64
+// %15 indirim, half-up yuvarlama (pozitif sayılar):
+func applyPct(p Cents, pct int64) Cents {
+    return Cents((int64(p)*(100-pct) + 50) / 100)
+}
+func (c Cents) String() string {
+    return fmt.Sprintf("%d.%02d", c/100, c%100)
+}
+// ASLA float64 ile para hesaplama.</pre>
+    <h3>Interface / Strategy</h3>
+<pre>type Rule interface {
+    Name() string
+    Check(ctx RuleContext) *Violation   // nil = OK
+}
+type MaxHours struct{ Max time.Duration }
+func (r MaxHours) Name() string { return "max_hours" }
+func (r MaxHours) Check(c RuleContext) *Violation { ... }
+
+rules := []Rule{NoOverlap{}, MinRest{11*time.Hour}, MaxHours{40*time.Hour}}
+// fonksiyon tipi de olur:
+type PriceRule func(Line) (Cents, bool)</pre>
+    <h3>Eşzamanlılık</h3>
+<pre>type S struct { mu sync.Mutex; ... }   // zero value kullanılabilir
+s.mu.Lock(); defer s.mu.Unlock()
+// TUZAK: kilitli public metottan başka kilitli public metodu çağırma
+// → deadlock. İç yardımcılar kilitsiz: func (s *S) availableLocked(...)
+sync.RWMutex: RLock() sadece okuma için
+// struct'ı değer olarak kopyalama (mutex kopyalanır) → pointer receiver</pre>
+    <h3>Priority queue (container/heap)</h3>
+<pre>type pq []*Task
+func (q pq) Len() int            { return len(q) }
+func (q pq) Less(i, j int) bool  { return q[i].Due.Before(q[j].Due) }
+func (q pq) Swap(i, j int)       { q[i], q[j] = q[j], q[i] }
+func (q *pq) Push(x any)         { *q = append(*q, x.(*Task)) }
+func (q *pq) Pop() any {
+    old := *q; n := len(old); t := old[n-1]
+    *q = old[:n-1]; return t
+}
+heap.Init(&amp;q); heap.Push(&amp;q, t); t := heap.Pop(&amp;q).(*Task)</pre>
+    <p class="small">Mülakatta önce <b>O(n) tarama</b> yaz, sonra "at scale I'd use a heap" de. Erken optimizasyon zaman yer.</p>
+    <h3>fmt</h3>
+<pre>%v değer  %+v alan adlarıyla  %q tırnaklı string  %T tip  %6.2f
+strings.Builder; strings.Join(xs, ", "); strconv.Itoa(n)</pre>
+  </div>
+  </div>
+</section>
+
+
+<section class="page">
+  <div class="ph"><span class="t">Tekrar eden kalıplar + Part 5 tartışma cevapları</span><span class="n">5 / 14 · Kalıplar</span></div>
+  <div class="cols">
+  <div>
+    <h3>9 refleks (her problemde)</h3>
+    <table class="small">
+      <tr><td><b>1. Idempotency</b></td><td>Aynı ID + aynı içerik → önceki sonucu dön. Farklı içerik → <code>ErrConflict</code>. Sakla: <code>map[OrderID]record</code>.</td></tr>
+      <tr><td><b>2. Validate → check → apply</b></td><td>Önce tüm girdiyi doğrula, sonra <b>tüm</b> satırları kontrol et, en son değiştir. Hata = state değişmedi.</td></tr>
+      <tr><td><b>3. Durum makinesi</b></td><td>Geçişler tek map'te. Geçersiz → <code>ErrInvalidState</code> (+ from/to bilgisi).</td></tr>
+      <tr><td><b>4. Para = int cents</b></td><td>Yuvarlama kuralını söyle ve tek fonksiyonda tut.</td></tr>
+      <tr><td><b>5. Determinizm</b></td><td>Map sırası rastgele: çıktıyı sırala, eşitlikte ikinci anahtar (ID).</td></tr>
+      <tr><td><b>6. Clock enjekte</b></td><td>TTL/expiry'yi test edebilmek için. <b>Lazy expiry</b>: işlem anında kontrol et, arka plan goroutine'i gerekmez.</td></tr>
+      <tr><td><b>7. Typed error</b></td><td>Çağıran <code>errors.Is/As</code> ile ayırt eder. Tüm eksikleri listele (sıralı), ilkinde durma.</td></tr>
+      <tr><td><b>8. Kopya dön</b></td><td>İç slice/map'i dışarı verme.</td></tr>
+      <tr><td><b>9. Tek mutex, sonra konuş</b></td><td>"In production this lock becomes a DB transaction / row lock / partition."</td></tr>
+    </table>
+
+    <h3>Kodu "tamam" demeden önce 60 sn kontrol</h3>
+    <ul class="small check">
+      <li>Sıfır / negatif / boş girdi denendi mi?</li>
+      <li>Aynı istek iki kez → aynı sonuç?</li>
+      <li>Hata sonrası state değişmedi mi? (göster!)</li>
+      <li>Çıktı sıralı mı?</li>
+      <li>Süre sınırı tam sınırda (== deadline) ne yapıyor?</li>
+      <li>İsimler okunur mu? Uzun fonksiyonu böl.</li>
+      <li><code>main()</code> çıktısı mülakatçıya anlamlı mı?</li>
+    </ul>
+  </div>
+  <div>
+    <h3>Part 5: "How would this work in production?"</h3>
+    <p class="small"><b>Persistence:</b> <span class="say">"State goes to Postgres. Reservations become rows; the check-and-apply runs in one transaction with <code>SELECT … FOR UPDATE</code> on the stock rows, or a conditional update: <code>UPDATE stock SET reserved = reserved + $q WHERE … AND on_hand - reserved &gt;= $q</code>. Idempotency becomes a unique constraint on order_id."</span></p>
+    <p class="small"><b>Eşzamanlılık / ölçek:</b> <span class="say">"One mutex serializes everything. Next step is a lock per store, because stores are independent. At scale, partition by store: one Kafka partition or one worker owns a store, so there's a single writer and no cross-node locks."</span></p>
+    <p class="small"><b>Event'ler:</b> <span class="say">"Every state change emits an event, like ReservationCreated or StockReceived, through a pending_events table written in the same transaction (the transactional outbox pattern), so the DB write and the event can't diverge. Consumers are idempotent because delivery is at-least-once."</span></p>
+    <p class="small"><b>Sırasız / tekrarlı event:</b> event_id ile dedupe, entity başına sequence/version; eski version'u yok say; boşluk varsa kısa buffer + timeout, sonra reconcile.</p>
+    <p class="small"><b>API:</b> <code>POST /stores/{id}/reservations</code> + Idempotency-Key → 201; stok yok → 409 + eksik listesi; geçersiz → 400/422. gRPC'de <code>FAILED_PRECONDITION</code>, <code>ALREADY_EXISTS</code>.</p>
+    <p class="small"><b>Gözlemlenebilirlik:</b> reservation başarı/red oranı, shortage oranı SKU bazlı, p99 latency, expired reservation sayısı, pending_events lag (en eski gönderilmemiş satırın yaşı). Log'da order_id, store_id.</p>
+    <p class="small"><b>Test:</b> table-driven unit testler, fake clock, <code>go test -race</code>, eşzamanlı rezervasyon testi (100 goroutine, son ürün tek kişiye), DB ile entegrasyon testi (testcontainers).</p>
+    <p class="small"><b>Expiry production'da:</b> lazy kontrol + periyodik sweeper job (ya da DB'de <code>expires_at</code> index + batch update). Saat kayması: tek kaynak (DB'nin <code>now()</code>).</p>
+    <p class="small"><b>Para / fiyat:</b> fiyatı sipariş anında <b>snapshot</b>'la, sonradan değişen fiyat geçmiş siparişi değiştirmesin.</p>
+    <p class="small"><b>AI kullanımı (ilan istiyor; kendi pratiğine göre uyarla):</b> <span class="say">"I use AI assistants daily, for boilerplate, tests and exploring unfamiliar code, but I review and run everything and I own the result. Domain rules like rounding or state transitions I write myself, and I use AI to challenge the edge cases."</span></p>
+  </div>
+  </div>
+</section>
+
+
+<section class="page">
+  <div class="ph"><span class="t">Isınma: tek mağaza stok rezervasyonu (kağıtta 15 dk)</span><span class="n">6 / 14 · Isınma</span></div>
+  <div class="box small"><b>Problem:</b> Tek mağaza, in-memory servis. Bir sipariş için stok rezerve et ve rezervasyonu iptal et. İstekler tekrar gelebilir. Hata durumunda state değişmemeli. (Alıştırma kuralları; şirketten bildirilmiş bir soru değil.)</div>
+  <div class="cols">
+  <div>
+    <h3>Sözleşme</h3>
+    <ul class="small">
+      <li>Bir order ID = bir SKU + pozitif tam sayı miktar.</li>
+      <li>Aynı ID + aynı girdi → mevcut rezervasyonu dön. Aynı ID + farklı girdi → conflict.</li>
+      <li>İptal stoğu <b>bir kez</b> geri verir; tekrar iptal etkisizdir.</li>
+      <li>İptal edilmiş bir rezervasyonun tekrarı, iptal kaydını döner; yeniden rezerve <b>etmez</b>.</li>
+      <li>Bilinmeyen iptal hata; olmayan SKU = 0 stok. Tek process, sıralı çağrılar, süre dolması yok.</li>
+    </ul>
+    <h3>Elle izle (önce kendin doldur)</h3>
+    <table class="small">
+      <tr><th>İşlem</th><th>Beklenen</th><th>milk</th></tr>
+      <tr><td>Başlangıç milk = 5</td><td>Rezervasyon yok</td><td>5</td></tr>
+      <tr><td>Reserve A, milk, 3</td><td>A RESERVED</td><td>2</td></tr>
+      <tr><td>Tekrar A, milk, 3</td><td>Aynı rezervasyon</td><td>2</td></tr>
+      <tr><td>Reserve A, milk, 4</td><td>Conflict, değişiklik yok</td><td>2</td></tr>
+      <tr><td>Reserve B, milk, 3</td><td>Yetersiz stok, değişiklik yok</td><td>2</td></tr>
+      <tr><td>Cancel A; tekrar cancel A</td><td>A CANCELLED, bir kez iade</td><td>5</td></tr>
+      <tr><td>Tekrar A, milk, 3</td><td>CANCELLED kaydı döner</td><td>5</td></tr>
+    </table>
+    <h3>Kodu çevirmeden önce yaz</h3>
+    <p class="small">Hangi veriyi saklıyorsun? Stok hangi satırda değişebilir? Stoğa bakmadan <b>önce</b> hangi kontrol yapılmalı? Çağıranın iç kaydı değiştirmesini nasıl engellersin?</p>
+    <div class="write"></div><div class="write"></div><div class="write"></div><div class="write"></div><div class="write"></div>
+    <div class="warn small"><b>Kritik sıra:</b> validate → <b>mevcut siparişe bak</b> → stok kontrolü → değiştir. Stok kontrolünü replay kontrolünden önce yaparsan, ilk istek stoğu zaten düşürdüğü için aynı isteğin tekrarı "yetersiz stok" ile başarısız olur.</div>
+  </div>
+  <div>
+    <h3>Go cevabı (derlendi, <code>go test -race</code> geçti)</h3>
+<pre style="font-size:6.9pt;line-height:1.2">package main
+
+import &quot;errors&quot;
+
+type Reservation struct {
+  SKU   string
+  Qty   int
+  State string
+}
+type Store struct {
+  stock  map[string]int
+  orders map[string]Reservation
+}
+
+func NewStore(stock map[string]int) *Store {
+  copyStock := make(map[string]int, len(stock))
+  for sku, qty := range stock {
+    copyStock[sku] = qty
+  }
+  return &amp;Store{copyStock, map[string]Reservation{}}
+}
+func (s *Store) Reserve(id, sku string, qty int) (Reservation, error) {
+  if id == &quot;&quot; || sku == &quot;&quot; || qty &lt;= 0 {
+    return Reservation{}, errors.New(&quot;invalid input&quot;)
+  }
+  if old, ok := s.orders[id]; ok {
+    if old.SKU != sku || old.Qty != qty {
+      return Reservation{}, errors.New(&quot;conflicting replay&quot;)
+    }
+    return old, nil
+  }
+  if s.stock[sku] &lt; qty {
+    return Reservation{}, errors.New(&quot;insufficient stock&quot;)
+  }
+  row := Reservation{sku, qty, &quot;RESERVED&quot;}
+  s.stock[sku] -= qty
+  s.orders[id] = row
+  return row, nil
+}
+func (s *Store) Cancel(id string) (Reservation, error) {
+  old, ok := s.orders[id]
+  if !ok {
+    return Reservation{}, errors.New(&quot;unknown order&quot;)
+  }
+  if old.State == &quot;CANCELLED&quot; {
+    return old, nil
+  }
+  s.stock[old.SKU] += old.Qty
+  old.State = &quot;CANCELLED&quot;
+  s.orders[id] = old
+  return old, nil
+}</pre>
+    <p class="small">Dönüşler değer (struct kopyası), çağıran iç kaydı değiştiremez. Bu çekirdek sıralı çağrı varsayar; eşzamanlı çağrıda <b>tüm</b> Reserve/Cancel işlemini kilitle. Birden çok replika → DB transaction veya başka paylaşılan atomik otorite.</p>
+    <p class="small say">The main guarantee is that a repeated request can't change stock twice. I check the existing order before availability, and I keep each state transition together.</p>
+  </div>
+  </div>
+</section>
+
+
+<section class="page">
+  <div class="ph"><span class="t">Aggregator tekrarı: daha önce çalıştığın Go problemi</span><span class="n">7 / 14 · Go</span></div>
+  <p class="small">Sık sorulan bir pratik soru: Consumer zorunlu, Payment ve Address birbirinden bağımsız ve opsiyonel. Sonuçları ayrı değişkenlerde tutup WaitGroup bitince cevabı tek goroutine'de kurmuştun. Takip sorusu: <b>Payment'ın 500 ms bütçesi var.</b> (Bu bir mülakat alıştırması, production kodu değil.)</p>
+  <div class="cols">
+  <div>
+<pre style="font-size:6.9pt;line-height:1.2">func (s BootstrapService) Get(ctx context.Context,
+  id string) (BootstrapResponse, error) {
+  if strings.TrimSpace(id) == &quot;&quot; {
+    return BootstrapResponse{}, errors.New(&quot;invalid ID&quot;)
+  }
+  consumer, err := s.Consumer.GetConsumer(ctx, id)
+  if ctx.Err() != nil {
+    return BootstrapResponse{}, ctx.Err()
+  }
+  if err != nil {
+    return BootstrapResponse{}, err
+  }
+  var wg sync.WaitGroup
+  var payment Payment
+  var address Address
+  var paymentErr, addressErr error
+  wg.Add(2)
+
+  go func() {
+    defer wg.Done()
+    paymentCtx, cancel := context.WithTimeout(
+      ctx, 500*time.Millisecond,
+    )
+    defer cancel()
+    payment, paymentErr = s.Payment.GetPayment(
+      paymentCtx, consumer.ID,
+    )
+  }()
+  go func() {
+    defer wg.Done()
+    address, addressErr = s.Address.GetAddress(
+      ctx, consumer.ID,
+    )
+  }()
+  wg.Wait()
+
+  if err := ctx.Err(); err != nil {
+    return BootstrapResponse{}, err
+  }
+  // One goroutine builds the response from these local results.
+  // Treat an optional error as partial data, not total failure.
+  response := BootstrapResponse{Consumer: &amp;consumer}
+  if paymentErr == nil {
+    response.Payment = &amp;payment
+  }
+  if addressErr == nil {
+    response.Address = &amp;address
+  }
+  response.Partial = paymentErr != nil || addressErr != nil
+  return response, nil
+}</pre>
+  </div>
+  <div>
+    <h3>Sınırı tam olarak anlat</h3>
+    <p class="small say">Payment gets its own child context with a 500 ms timeout. Address keeps the parent context. A Payment timeout becomes a partial response, not a failure. This relies on the Payment client respecting cancellation: a context doesn't kill a goroutine.</p>
+    <ul class="small">
+      <li>WaitGroup tamamlanmayı bekler; context'e uymayan bir client yine bloklayabilir. Transport ve client deadline'a uymalı.</li>
+      <li>Parent iptali ile opsiyonel Payment timeout'u farklı şeyler: parent iptal → hata dön; Payment timeout → kısmi cevap.</li>
+      <li>Paylaşılan state yok: her goroutine kendi değişkenine yazar, cevap <code>wg.Wait()</code>'ten sonra kurulur → race yok.</li>
+    </ul>
+    <h3>Kısa retry cevabı</h3>
+    <p class="small say">I retry transient failures only when repeating the call is safe. I cap total attempts, back off with jitter, and stay inside the dependency's time budget. If most calls are failing, I'd rather shed load with concurrency limits and a circuit breaker. And I keep the retry policy in one layer, so retries don't multiply.</p>
+    <h3>Gösterilecek testler</h3>
+    <ul class="small check">
+      <li>Consumer hatası → opsiyonel çağrılar yapılmaz.</li>
+      <li>Bir opsiyonel hata, diğer sonucu korur (<code>Partial = true</code>).</li>
+      <li>Parent iptali yayılır.</li>
+      <li>Payment timeout'u Address'i iptal etmez.</li>
+      <li><code>ctx.Done()</code>'u bekleyen fake client ile timeout testi; <code>go test -race</code>.</li>
+    </ul>
+    <div class="tip small"><b>Hatırlatma:</b> önce doğru ve race-safe çözüm; context, timeout ve retry sonra, sorulunca. Erken soyutlama yok.</div>
+  </div>
+  </div>
+</section>
+
+
+<section class="page">
+  <div class="ph"><span class="t">Kağıt drill 1 · Son kullanma tarihli stok (FEFO)</span><span class="n">8 / 14 · Drill</span></div>
+  <p class="small muted">Nasıl çalışılır: 4 dk soru listesi yaz → tipleri ve imzaları kağıda yaz → ana fonksiyonun kodunu elle yaz → edge case'leri say → sayfa 12'deki cevap anahtarıyla karşılaştır.</p>
+  <div class="box"><b>Context:</b> Şirketin dark store'larında taze ürünler (süt, salata, et) <b>parti (lot)</b> halinde gelir ve her partinin son kullanma tarihi farklıdır. İsraf (waste) büyük bir maliyet. Toplayıcılar (picker) her zaman <b>son kullanma tarihi en yakın</b> partiden almalı (FEFO: First Expired, First Out). Bu çekirdek bileşeni yaz. In-memory, tek mağaza ile başla.</div>
+
+  <h3>Part 1 (~12 dk) · Partiler</h3>
+  <ul class="small">
+    <li><code>ReceiveLot(lot Lot) error</code>: yeni parti geldi. <code>Lot{ID, SKU, Qty, Expiry}</code></li>
+    <li><code>OnHand(sku SKU) int</code>: satılabilir (süresi dolmamış) toplam adet.</li>
+  </ul>
+  <h3>Part 2 (~12 dk) · FEFO toplama</h3>
+  <ul class="small">
+    <li><code>Pick(order OrderID, sku SKU, qty int) ([]Allocation, error)</code>: hangi partiden kaç adet alınacağını döner, stoktan düşer. <code>Allocation{LotID, Qty}</code></li>
+  </ul>
+  <h3>Part 3 (~10 dk) · İsraf ve indirim</h3>
+  <ul class="small">
+    <li><code>WriteOffExpired() []WriteOff</code>: süresi dolanları stoktan çıkar, rapor dön.</li>
+    <li><code>MarkdownSuggestions() []Markdown</code>: süresi yaklaşan partiler için indirim önerisi. Kural: 1 gün kala %50, 2 gün kala %30, 3 gün kala %10. <b>Kural ülkeye göre değişebilir.</b></li>
+  </ul>
+  <h3>Part 4 (bonus) · Çoklu mağaza ve event'ler</h3>
+  <ul class="small">
+    <li>Birden fazla mağaza; her stok değişikliği bir event üretsin (<code>LotReceived</code>, <code>Picked</code>, <code>WrittenOff</code>). Eşzamanlı güvenli.</li>
+  </ul>
+
+  <div class="cols">
+  <div>
+    <h3>Senin soru listen</h3>
+    <div class="write"></div><div class="write"></div><div class="write"></div><div class="write"></div><div class="write"></div><div class="write"></div>
+  </div>
+  <div>
+    <h3>Senin veri modelin</h3>
+    <div class="write"></div><div class="write"></div><div class="write"></div><div class="write"></div><div class="write"></div><div class="write"></div>
+  </div>
+  </div>
+  <h3>Pick() kodunu buraya elle yaz</h3>
+  <div style="border:1px solid #999; height:205px;"></div>
+</section>
+
+
+<section class="page">
+  <div class="ph"><span class="t">Kağıt drill 2 · Toplama görevi atama (warehouse execution)</span><span class="n">9 / 14 · Drill</span></div>
+  <div class="box"><b>Context:</b> Bir dark store'a gelen her sipariş için bir <b>pick task</b> oluşur. Siparişin müşteriye söz verilen bir teslim saati (<code>PromisedAt</code>) var. Picker'lar el terminalinden "sıradaki görev" ister. Amaç: geç kalan sipariş sayısını azaltmak ve hiçbir görevin "kayıp" olmaması. Görev atama servisini yaz.</div>
+
+  <h3>Part 1 (~12 dk) · Görev oluştur ve ata</h3>
+  <ul class="small">
+    <li><code>CreateTask(order OrderID, promisedAt time.Time) (TaskID, error)</code></li>
+    <li><code>NextTask(picker PickerID) (Task, error)</code>: en acil görevi verir.</li>
+    <li><code>Complete(task TaskID, picker PickerID) error</code></li>
+  </ul>
+  <h3>Part 2 (~12 dk) · Zaman aşımı ve iptal</h3>
+  <ul class="small">
+    <li>Atanan görev 15 dk içinde tamamlanmazsa tekrar kuyruğa döner (picker telefonu düşürdü, mola verdi…).</li>
+    <li><code>Cancel(order OrderID) error</code>: müşteri iptal etti. Atanmış görev de iptal edilebilir.</li>
+    <li><code>Release(task, picker) error</code>: picker görevi bırakır.</li>
+  </ul>
+  <h3>Part 3 (~10 dk) · Öncelik politikası</h3>
+  <ul class="small">
+    <li>Express siparişler (üyelik?) önce. Bazı mağazalar "en eski oluşturulan önce" ister. <b>Politika mağaza başına değiştirilebilir olmalı.</b></li>
+    <li><code>LateTasks(now) []Task</code>: söz verilen saati geçmiş ve tamamlanmamış görevler (sıralı).</li>
+  </ul>
+  <h3>Part 4 (bonus) · Batch picking</h3>
+  <ul class="small">
+    <li>Bir picker aynı anda en fazla 3 görev alabilir, aynı bölgedeki (zone) görevler birlikte verilir.</li>
+  </ul>
+
+  <div class="cols">
+  <div>
+    <h3>Durum makinesini çiz</h3>
+    <div style="border:1px solid #999; height:120px;"></div>
+    <h3>Senin soru listen</h3>
+    <div class="write"></div><div class="write"></div><div class="write"></div><div class="write"></div><div class="write"></div>
+  </div>
+  <div>
+    <h3>NextTask() kodunu elle yaz</h3>
+    <div style="border:1px solid #999; height:255px;"></div>
+  </div>
+  </div>
+</section>
+
+
+<section class="page">
+  <div class="ph"><span class="t">Kağıt drill 3 · Vardiya planlama kuralları (labor scheduling)</span><span class="n">10 / 14 · Drill</span></div>
+  <div class="box"><b>Context:</b> Grocery &amp; Retail ekibi mağaza personeli için vardiya planlıyor. Bir planlamacı bir çalışanı bir vardiyaya atarken sistem iş kanununa ve operasyon kurallarına uymayan atamaları <b>engellemeli</b> ve <b>nedenini açıkça</b> söylemeli. Finlandiya ve İsveç'te kurallar farklı. Atama servisini yaz. (İlanda "labor scheduling" geçiyor.)</div>
+
+  <h3>Part 1 (~12 dk) · Temel atama</h3>
+  <ul class="small">
+    <li><code>AddWorker(w Worker) error</code> · <code>Worker{ID, Name, Roles []Role}</code> (picker, receiver, shift_lead)</li>
+    <li><code>AddShift(s Shift) error</code> · <code>Shift{ID, Store, Role, Start, End, Capacity}</code></li>
+    <li><code>Assign(worker WorkerID, shift ShiftID) error</code>: kurallar: rol uyumu, vardiya dolu değil, çakışan vardiya yok.</li>
+  </ul>
+  <h3>Part 2 (~12 dk) · İş kanunu kuralları</h3>
+  <ul class="small">
+    <li>İki vardiya arasında en az 11 saat dinlenme.</li>
+    <li>Haftada (ISO hafta) en fazla 40 saat.</li>
+    <li>Atama reddedilirsa <b>tüm</b> ihlaller (sadece ilki değil) dönsün, sıralı ve okunur.</li>
+  </ul>
+  <h3>Part 3 (~10 dk) · Ülkeye göre kural seti</h3>
+  <ul class="small">
+    <li>Finlandiya: haftalık max 40 saat. İsveç: max 40 saat <b>ve</b> 24 saatte en fazla 13 saat çalışma. Yeni ülke eklemek kolay olmalı.</li>
+    <li><code>Unassign(worker, shift) error</code></li>
+  </ul>
+  <h3>Part 4 (bonus) · Öneri</h3>
+  <ul class="small">
+    <li><code>Suggest(shift ShiftID) []WorkerID</code>: bu vardiyaya kurallara uyarak atanabilecek çalışanlar; o hafta en az çalışan önce, eşitlikte ID.</li>
+  </ul>
+
+  <div class="cols">
+  <div>
+    <h3>Senin soru listen</h3>
+    <div class="write"></div><div class="write"></div><div class="write"></div><div class="write"></div><div class="write"></div><div class="write"></div>
+    <h3>Rule interface'ini tasarla</h3>
+    <div style="border:1px solid #999; height:110px;"></div>
+  </div>
+  <div>
+    <h3>MinRest kuralının Check() kodu</h3>
+    <div style="border:1px solid #999; height:240px;"></div>
+  </div>
+  </div>
+</section>
+
+
+<section class="page">
+  <div class="ph"><span class="t">İki kısa drill: sıralı stok event'leri ve fiyat hesabı</span><span class="n">11 / 14 · Drill</span></div>
+  <div class="cols">
+  <div>
+    <h3>Drill A · Stok delta'larını sırayla uygula</h3>
+    <p class="small">Event: store, SKU, event ID, sequence, delta. Sequence her store/SKU için birer artar. Çağrılar sıralı. Aynı event ID iki kez uygulanmaz. Eksik sequence gelene kadar gelecek event'leri bekletin (buffer). Geçersiz event state'i kısmen değiştirmez.</p>
+<pre>Başlangıç: quantity=10, last_sequence=0
+E1: id=a, sequence=1, delta=-3
+E3: id=c, sequence=3, delta=+4
+E1 tekrar
+E2: id=b, sequence=2, delta=-2
+E2 tekrar
+Her çağrıdan sonra: quantity / last_sequence / buffer</pre>
+    <p class="small">Aynı sequence farklı bir event ile gelirse? Boşluk hiç kapanmazsa? Elindekileri sıralayıp uygulamak doğru olur mu? Neden?</p>
+    <div class="write"></div><div class="write"></div><div class="write"></div><div class="write"></div><div class="write"></div>
+  </div>
+  <div>
+    <h3>Drill B · Deterministik fiyat</h3>
+    <p class="small">Para integer cents. Sıra: miktar indirimi → tek kupon → sıfır tabanı. Yüzde indirimi tam cent'e <b>aşağı</b> yuvarla, sonra çıkar. Negatif miktar ve fiyatı reddet. (Alıştırma kuralı.)</p>
+<pre>Birim fiyat: 199 cent, miktar: 3
+Miktar indirimi: miktar &gt;= 3 ise %10
+Kupon: indirimli ara toplamdan 100 cent
+
+Ara toplam, indirim, son toplam?
+Yuvarlama sınırını nasıl test edersin?
+Kuponlar birleşemezse ne değişir?</pre>
+    <div class="write"></div><div class="write"></div><div class="write"></div><div class="write"></div><div class="write"></div>
+    <p class="small">Sırf ilanda "design patterns" yazıyor diye strategy hiyerarşisi kurma. Tek fonksiyon yeterli olabilir; birden çok kural ayrı davranış ve test gerektirince policy interface'ine çıkar.</p>
+  </div>
+  </div>
+
+  <div class="upside">
+    <h3>Cevaplar (sayfayı çevir, önce çöz!)</h3>
+    <div class="cols small">
+    <div>
+      <table class="small">
+        <tr><th>Girdi</th><th>quantity</th><th>last_seq</th><th>buffer</th></tr>
+        <tr><td>E1</td><td>7</td><td>1</td><td>boş</td></tr>
+        <tr><td>E3</td><td>7</td><td>1</td><td>3</td></tr>
+        <tr><td>E1 tekrar</td><td>7</td><td>1</td><td>3</td></tr>
+        <tr><td>E2</td><td>9</td><td>3</td><td>boş (önce 2, sonra 3)</td></tr>
+        <tr><td>E2 tekrar</td><td>9</td><td>3</td><td>boş</td></tr>
+      </table>
+      <p>Delta önceki duruma bağlı: 2'yi atlayıp 3'ü uygulamak yanlış olabilir. Boşluğu boyut ve süre limitiyle bekle; kapanmazsa o anahtarı durdur, yetkili bir snapshot'tan uzlaştır. Aynı event ID/sequence'ın çelişkili tekrarını normal duplicate sayma, hata olarak yakala. Production'da dedupe ve checkpoint state'i restart'tan sağ çıkmalı.</p>
+    </div>
+    <div>
+      <p><b>Drill B:</b> 199 × 3 = <b>597</b>. %10 = 59,7 → aşağı <b>59</b>. İndirimli: <b>538</b>. Kupon sonrası: <b>438 cent</b>.</p>
+      <p><b>Testler:</b> miktar 2 → indirim yok; miktar 0 → 0; kupon ara toplamdan büyük → 0; geçersiz girdi state'i değiştirmez; yuvarlama sınırı (ör. 10 cent × 3 = 30 → indirim tam 3; 11 cent × 3 = 33 → %10 = 3,3 → 3).</p>
+      <p><b>Production takipleri:</b> birden çok replika → mutex yetmez, atomik update/transaction. Rezerve + yayınla → stok ve pending_events satırı aynı commit'te, duplicate teslimatı tolere et. Süre dolması → clock enjekte et, sınırı tanımla, stoğu korunan bir geçişle bir kez iade et.</p>
+    </div>
+    </div>
+  </div>
+</section>
+
+
+<section class="page">
+  <div class="ph"><span class="t">Cevap anahtarı · Drill 1 (FEFO) ve Drill 2 (Pick tasks)</span><span class="n">12 / 14 · Cevap</span></div>
+  <p class="small"><b>Önce kendin çöz, sonra bak.</b> Tek doğru çözüm yok; önemli olan kararları söyleyebilmek.</p>
+  <div class="cols">
+  <div>
+    <h3>Drill 1 · Sorman gerekenler (+ makul cevap)</h3>
+    <ul class="small">
+      <li>Aynı lot ID tekrar gelirse? → aynı içerik: no-op; farklı: <code>ErrConflict</code>.</li>
+      <li>Süresi bugün dolan ürün satılabilir mi? → <code>Expiry</code> anında satılamaz (<code>!now.Before(expiry)</code>). Sınırı netleştir!</li>
+      <li>Geçmiş tarihli lot gelirse? → <code>ErrInvalidArgument</code>.</li>
+      <li>Yeterli stok yoksa kısmi toplama mı? → ya hep ya hiç, <code>*ShortageError</code>.</li>
+      <li>Aynı expiry'de iki lot? → önce erken gelen / küçük ID (determinizm).</li>
+      <li>Aynı order tekrar Pick → aynı allocation'ları dön (idempotent).</li>
+    </ul>
+    <h3>Drill 1 · Veri modeli</h3>
+<pre>type Lot struct { ID LotID; SKU SKU; Qty int; Expiry time.Time }
+type Store struct {
+  mu    sync.Mutex
+  clock Clock
+  lots  map[SKU][]*Lot          // FEFO sıralı tutulur
+  seen  map[LotID]Lot           // idempotency (orijinal)
+  picks map[OrderID]pickRecord  // idempotency
+}</pre>
+    <h3>Drill 1 · Pick</h3>
+<pre style="font-size:7.3pt">func (s *Store) Pick(o OrderID, sku SKU, qty int) ([]Allocation, error) {
+  if o == "" || qty &lt;= 0 {
+    return nil, fmt.Errorf("%w: order=%q qty=%d", ErrInvalidArgument, o, qty)
+  }
+  s.mu.Lock(); defer s.mu.Unlock()
+  if p, ok := s.picks[o]; ok {                     // idempotent replay
+    if p.sku != sku || p.qty != qty { return nil, ErrConflict }
+    return append([]Allocation(nil), p.allocs...), nil
+  }
+  now := s.clock.Now()
+  avail := 0                                         // 1) check
+  for _, l := range s.lots[sku] {
+    if now.Before(l.Expiry) { avail += l.Qty }
+  }
+  if avail &lt; qty {
+    return nil, &amp;ShortageError{SKU: sku, Requested: qty, Available: avail}
+  }
+  var out []Allocation                               // 2) apply (FEFO)
+  left := qty
+  for _, l := range s.lots[sku] {
+    if left == 0 { break }
+    if !now.Before(l.Expiry) || l.Qty == 0 { continue }
+    take := min(l.Qty, left)
+    l.Qty -= take; left -= take
+    out = append(out, Allocation{LotID: l.ID, Qty: take})
+  }
+  s.picks[o] = pickRecord{sku, qty, out}
+  return append([]Allocation(nil), out...), nil
+}</pre>
+    <p class="small"><b>Markdown (Part 3):</b> <code>type MarkdownPolicy interface{ Discount(daysLeft int) (pct int, ok bool) }</code>; ülke başına politika (Strategy). Gün hesabını <b>mağazanın yerel saatinde</b> yap (timezone sorusu = artı puan).</p>
+  </div>
+  <div>
+    <h3>Drill 2 · Sorman gerekenler</h3>
+    <ul class="small">
+      <li>Picker'ın zaten görevi varken NextTask? → aynı görevi dön (idempotent, el terminali tekrar dener).</li>
+      <li>Kuyruk boşsa? → <code>ErrNoTask</code> (hata mı, boş sonuç mu? sor).</li>
+      <li>Başka picker'ın görevini tamamlama? → <code>ErrNotOwner</code>.</li>
+      <li>Zaman aşımına uğramış görevi eski picker tamamlarsa? → tekrar atanmadıysa kabul et (pragmatik) ya da reddet: <b>sor</b>.</li>
+      <li>Eşit PromisedAt → oluşturulma sırası (seq).</li>
+    </ul>
+    <h3>Drill 2 · Durum makinesi</h3>
+<pre>QUEUED ──NextTask──▶ ASSIGNED ──Complete──▶ DONE
+   ▲                    │
+   └──timeout/Release───┘
+QUEUED | ASSIGNED ──Cancel──▶ CANCELLED   (DONE'dan çıkış yok)</pre>
+    <h3>Drill 2 · NextTask (lazy timeout + O(n) seçim)</h3>
+<pre style="font-size:7.3pt">func (s *Service) NextTask(p PickerID) (Task, error) {
+  if p == "" { return Task{}, ErrInvalidArgument }
+  s.mu.Lock(); defer s.mu.Unlock()
+  now := s.clock.Now()
+  s.expireLocked(now)                    // ASSIGNED &amp;&amp; now &gt;= assignedAt+15m → QUEUED
+
+  if id, ok := s.byPicker[p]; ok {       // already has one: return it
+    return *s.tasks[id], nil
+  }
+  var best *Task
+  for _, t := range s.tasks {
+    if t.Status != StatusQueued { continue }
+    if best == nil || s.policy.Less(t, best) { best = t }
+  }
+  if best == nil { return Task{}, ErrNoTask }
+  best.Status, best.Picker, best.AssignedAt = StatusAssigned, p, now
+  s.byPicker[p] = best.ID
+  return *best, nil                      // copy, not pointer
+}
+
+type Policy interface{ Less(a, b *Task) bool }
+type EarliestPromise struct{}
+func (EarliestPromise) Less(a, b *Task) bool {
+  if !a.PromisedAt.Equal(b.PromisedAt) { return a.PromisedAt.Before(b.PromisedAt) }
+  return a.Seq &lt; b.Seq
+}
+type ExpressFirst struct{ Next Policy }   // decorator / chain
+func (e ExpressFirst) Less(a, b *Task) bool {
+  if a.Express != b.Express { return a.Express }
+  return e.Next.Less(a, b)
+}</pre>
+    <p class="small"><b>Söyle:</b> "The scan is O(n); with thousands of queued tasks per store I'd use a heap, but the policy interface stays the same." · expireLocked'da <code>byPicker</code>'dan da sil (unutulan klasik bug!).</p>
+  </div>
+  </div>
+</section>
+
+
+<section class="page">
+  <div class="ph"><span class="t">Cevap anahtarı · Drill 3 (Vardiya kuralları)</span><span class="n">13 / 14 · Cevap</span></div>
+  <div class="cols">
+  <div>
+    <h3>Sorman gerekenler</h3>
+    <ul class="small">
+      <li>Vardiya gece yarısını geçebilir mi? (22:00-06:00) → evet; haftalık saatte hangi haftaya sayılır? → başladığı hafta (basit kural, söyle).</li>
+      <li>Zamanlar hangi timezone'da? → mağazanın yerel saati; ISO hafta yerel saate göre. DST günü vardiya 7 ya da 9 saat sürebilir: süreyi <code>End.Sub(Start)</code> ile hesapla, saat farkıyla değil.</li>
+      <li>Uç uca iki vardiya (biri 14:00 biter, diğeri 14:00 başlar) çakışma mı? → hayır (yarı açık aralık [start, end)), ama dinlenme kuralına takılır.</li>
+      <li>Aynı atama tekrar → idempotent no-op.</li>
+      <li>Kural ihlalinde "override" (yönetici onayı) var mı? → kapsam dışı, sonra.</li>
+    </ul>
+    <h3>Tipler</h3>
+<pre style="font-size:6.9pt;line-height:1.2">type Violation struct { Rule, Detail string }
+
+type ValidationError struct{ Violations []Violation }
+func (e *ValidationError) Error() string {
+  parts := make([]string, len(e.Violations))
+  for i, v := range e.Violations { parts[i] = v.Rule + ": " + v.Detail }
+  return "assignment rejected: " + strings.Join(parts, "; ")
+}
+func (e *ValidationError) Unwrap() error { return ErrRuleViolation }
+
+type RuleContext struct {
+  Worker   Worker
+  Shift    Shift
+  Existing []Shift          // worker's current shifts (copy)
+}
+type Rule interface {
+  Name() string
+  Check(c RuleContext) *Violation
+}
+// country → rules  (Part 3: add a country = add a line)
+var rulesByCountry = map[string][]Rule{
+  "FI": {RoleMatch{}, NoOverlap{}, MinRest{11 * time.Hour},
+         MaxWeekly{40 * time.Hour}},
+  "SE": {RoleMatch{}, NoOverlap{}, MinRest{11 * time.Hour},
+         MaxWeekly{40 * time.Hour}, MaxInWindow{13 * time.Hour, 24 * time.Hour}},
+}</pre>
+  </div>
+  <div>
+    <h3>Assign</h3>
+<pre style="font-size:6.9pt;line-height:1.2">func (s *Service) Assign(wid WorkerID, sid ShiftID) error {
+  s.mu.Lock(); defer s.mu.Unlock()
+  w, ok := s.workers[wid]
+  if !ok { return fmt.Errorf("%w: worker %s", ErrNotFound, wid) }
+  sh, ok := s.shifts[sid]
+  if !ok { return fmt.Errorf("%w: shift %s", ErrNotFound, sid) }
+  if s.assigned[sid][wid] { return nil }            // idempotent
+  if len(s.assigned[sid]) &gt;= sh.Capacity {
+    return fmt.Errorf("%w: shift %s is full", ErrInvalidState, sid)
+  }
+  ctx := RuleContext{w, sh, s.shiftsOfLocked(wid)}
+  var vs []Violation
+  for _, r := range rulesByCountry[s.countryOf(sh.Store)] {
+    if v := r.Check(ctx); v != nil { vs = append(vs, *v) }
+  }
+  if len(vs) &gt; 0 {
+    sort.Slice(vs, func(i, j int) bool { return vs[i].Rule &lt; vs[j].Rule })
+    return &amp;ValidationError{Violations: vs}
+  }
+  if s.assigned[sid] == nil { s.assigned[sid] = map[WorkerID]bool{} }
+  s.assigned[sid][wid] = true
+  return nil
+}</pre>
+    <h3>MinRest ve MaxWeekly</h3>
+<pre style="font-size:6.9pt;line-height:1.2">type MinRest struct{ Min time.Duration }
+func (MinRest) Name() string { return "min_rest" }
+func (r MinRest) Check(c RuleContext) *Violation {
+  for _, e := range c.Existing {
+    var gap time.Duration
+    switch {
+    case !e.End.After(c.Shift.Start): gap = c.Shift.Start.Sub(e.End) // e before
+    case !c.Shift.End.After(e.Start): gap = e.Start.Sub(c.Shift.End) // e after
+    default: continue                         // overlap: NoOverlap reports it
+    }
+    if gap &lt; r.Min {
+      return &amp;Violation{"min_rest", fmt.Sprintf("only %v rest around shift %s", gap, e.ID)}
+    }
+  }
+  return nil
+}
+
+type MaxWeekly struct{ Max time.Duration }
+func (MaxWeekly) Name() string { return "max_weekly_hours" }
+func (r MaxWeekly) Check(c RuleContext) *Violation {
+  y, w := c.Shift.Start.ISOWeek()
+  total := c.Shift.End.Sub(c.Shift.Start)
+  for _, e := range c.Existing {
+    if ey, ew := e.Start.ISOWeek(); ey == y &amp;&amp; ew == w {
+      total += e.End.Sub(e.Start)
+    }
+  }
+  if total &gt; r.Max {
+    return &amp;Violation{"max_weekly_hours", fmt.Sprintf("%v &gt; %v", total, r.Max)}
+  }
+  return nil
+}</pre>
+    <p class="small"><b>Suggest (Part 4):</b> her aday için aynı kuralları çalıştır (Assign'ı yeniden kullan: <code>validateLocked</code> diye ayır, kopyala-yapıştır yapma), geçenleri haftalık saate göre sırala, eşitlikte ID.</p>
+  </div>
+  </div>
+</section>
+
+
+<section class="page">
+  <div class="ph"><span class="t">Perakende sözlüğü + son tekrar</span><span class="n">14 / 14 · Sözlük</span></div>
+  <p class="small">Business problem'i hızlı anlamak için alan terimleri. Mülakatçı bunlardan birini kullanırsa anlamını bilmek güven verir; bilmiyorsan <b>sormak da</b> iyi: "Just to make sure, by case pack you mean…?"</p>
+  <table class="small">
+    <tr><th style="width:20%">Terim</th><th>Anlamı · koddaki karşılığı</th></tr>
+    <tr><td>Dark store</td><td>Müşteriye kapalı mini depo; sadece online siparişler. Mağaza = <code>StoreID</code>.</td></tr>
+    <tr><td>SKU</td><td>Stock Keeping Unit: tekil ürün varyantı (1L süt Valio ≠ 1,5L).</td></tr>
+    <tr><td>On-hand / Available</td><td>Fiziksel stok / satılabilir = on-hand − reserved − (hasarlı, süresi dolmuş).</td></tr>
+    <tr><td>Reservation / allocation</td><td>Checkout'ta stoğu siparişe ayırmak. TTL ile serbest kalır.</td></tr>
+    <tr><td>Replenishment</td><td>Stok yenileme. <b>Reorder point</b> altına düşünce <b>target level</b>'a tamamla.</td></tr>
+    <tr><td>Safety stock</td><td>Talep belirsizliğine karşı tampon stok.</td></tr>
+    <tr><td>Lead time</td><td>Siparişten teslime geçen süre. Sipariş miktarı = tahmini talep × (lead time + review period) + safety − (on-hand + in-transit).</td></tr>
+    <tr><td>Case pack / MOQ</td><td>Tedarikçi koli adedi (12'li) / minimum sipariş miktarı → yukarı yuvarla: <code>(q + pack - 1) / pack * pack</code>.</td></tr>
+    <tr><td>PO (Purchase Order)</td><td>Tedarikçiye verilen sipariş. Durumlar: draft → submitted → confirmed → (partially) received → closed.</td></tr>
+    <tr><td>ASN</td><td>Advance Shipping Notice: tedarikçinin "şunları gönderdim" bildirimi.</td></tr>
+    <tr><td>GRN / Goods receipt</td><td>Depoda mal kabul kaydı (sayılan gerçek miktar).</td></tr>
+    <tr><td>Three-way match</td><td>PO ↔ mal kabul ↔ fatura eşleştirme, tolerans dahilinde → ödeme onayı.</td></tr>
+    <tr><td>FEFO / FIFO</td><td>İlk son kullanma tarihi dolan önce çıkar / ilk giren önce çıkar.</td></tr>
+    <tr><td>Shrink / waste</td><td>Kayıp: çalınma, hasar, son kullanma tarihi geçmesi. Write-off.</td></tr>
+    <tr><td>Markdown</td><td>Süresi yaklaşan ürüne indirim.</td></tr>
+    <tr><td>Planogram / slotting</td><td>Ürünün raftaki yeri; toplama rotasını etkiler (zone, aisle).</td></tr>
+    <tr><td>Pick / pack / dispatch</td><td>Raftan topla → paketle → kuryeye teslim. Her biri bir durum.</td></tr>
+    <tr><td>Cycle count</td><td>Stok sayımı; sistem ile gerçek arasındaki fark → <b>adjustment</b> event'i.</td></tr>
+    <tr><td>Substitution</td><td>Ürün yoksa müşteri onayıyla benzeri verilir.</td></tr>
+    <tr><td>Forecast</td><td>SKU × mağaza × gün talep tahmini; replenishment'ın girdisi.</td></tr>
+    <tr><td>Price zone / national price</td><td>Bölge / ülke fiyatı; mağaza override &gt; zone &gt; national önceliği.</td></tr>
+  </table>
+  <div class="cols">
+    <div class="box small">
+      <h4>Mülakattan 10 dk önce oku</h4>
+      <ol>
+        <li>Kod yazmadan önce: özetle, sor, varsayımları yaz.</li>
+        <li>İskelet: tipler, hatalar, Clock, Service + mutex, main + check.</li>
+        <li>Validate → check → apply. Hata = state aynı.</li>
+        <li>Idempotency, durum makinesi, sıralı çıktı, cents.</li>
+        <li>Her part'tan sonra <b>Run</b>. Sesli düşün.</li>
+        <li>Sonda: Postgres, per-store lock/partition, pending_events + event publisher + Kafka, metrikler, -race.</li>
+      </ol>
+    </div>
+    <div class="box small">
+      <h4>Onlara sorabileceğin sorular</h4>
+      <ol>
+        <li>What does a typical week look like for an engineer in this team?</li>
+        <li>How do you split work between Go services and the forecasting/data platform?</li>
+        <li>What was the hardest part of replacing the third-party forecasting solution?</li>
+        <li>How does on-call work, and how often do you get paged?</li>
+        <li>How do teams in Helsinki and Stockholm collaborate day to day?</li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+
+</body>
+</html>
