@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Tasks · Kapsam</title>
+<link rel="stylesheet" href="../assets/site.css?v=11">
+</head>
+<body>
+<header class="topbar"><div class="topbar-inner">
+  <a class="brand" href="../index.html">Mülakat Hazırlığı</a>
+  <nav>
+    <a href="../index.html">Ana sayfa</a>
+    <a href="../knowledge-sync/kapsam.html">Knowledge Sync</a>
+    <a class="active" href="kapsam.html">Agent Tasks</a>
+    <a href="../deployment-api/kapsam.html">Deployment API</a>
+  </nav>
+</div>
+<div class="subnav"><nav>
+    <a class="active" href="kapsam.html">1 · Kapsam</a>
+    <a href="api.html">2 · API</a>
+    <a href="cozum.html">3 · Minimum çözüm</a>
+    <a href="hata.html">4 · Hata ve güvenlik</a>
+    <a href="olcek.html">5 · Ölçek ve follow-up</a>
+    <a href="sozluk.html">Sözlük</a>
+    <a href="mock.html">Mock</a>
+</nav></div></header>
+
+<main class="wide">
+<h1>Agent Tasks · 1. Kapsam</h1>
+<div class="step-hint"><b>Playbook 1/5 · Kapsam.</b> Ne yaparsın: kim kullanıyor, ana işlem ne, veri ne büyüklükte, ne kadar güncel olmalı? 5 dakikayı geçme. Gösterdiğin: doğru problemi çözdüğünü.</div>
+<h2 id="soru">Soru</h2>
+<div class="say">Users talk to our agents from the web app, Slack, and through a public API. An agent task can call tools like search, Salesforce or Jira and can take from a few seconds to several minutes. Users want to see the answer streaming. Design the API and the system behind it.</div>
+<h2 id="urun">Ürün: "Asistana bir görev ver"</h2>
+  <h3>Basit hali</h3>
+  <p>Asistana bir soru ya da iş veriyorsun. Buna bir <b>task</b> diyoruz, yani asistanın bir çalışması. Asistan düşünüyor, gerekirse araç kullanıyor (arama, Jira, CRM), cevabı da harf harf ekrana yazıyor; sohbet asistanlarında gördüğün akış gibi.</p>
+  <p>Bu API'yi herkes kullanır: web uygulaması, Slack botu ve kendi sistemini ürüne bağlayan müşteriler.</p>
+
+  <h3 id="tasks-akis">Ürün olarak akış</h3>
+  <ol>
+    <li><b>Soru sorma.</b> Çalışan "Q3'te churn neden arttı? Özetle ve satış ekibi için Jira'da ticket aç" yazıyor. → <code>POST /v1/conversations/{id}/tasks</code></li>
+    <li><b>Asistan çalışıyor.</b> Ekranda canlı olarak görüyorsun:
+      <ul>
+        <li>"Arama yapılıyor: Q3 churn…" (tool başladı)</li>
+        <li>"3 doküman bulundu" (tool bitti)</li>
+        <li>"Q3'te churn'ün artmasının ana nedeni…" (cevap harf harf akıyor)</li>
+      </ul></li>
+    <li><b>Onay isteme.</b> Ticket açmak bir değişiklik olduğu için asistan "Jira'da şu ticket'ı açayım mı?" diye soruyor. Kullanıcı onaylıyor. → <code>POST /v1/tasks/{id}/tool_approvals</code></li>
+    <li><b>Bağlantı koparsa.</b> Laptop'unu kapattın ya da tren tüneline girdi. Task arkada devam ediyor. Geri geldiğinde kaldığın yerden görüyorsun. → <code>GET /v1/tasks/{id}/events</code> (Last-Event-ID ile)</li>
+    <li><b>İptal.</b> "Dur, vazgeçtim" diyebilirsin. → <code>POST /v1/tasks/{id}:cancel</code></li>
+    <li><b>Entegrasyon modu.</b> Bir müşteri kendi sisteminden çağırıyorsa canlı akışı izlemek istemeyebilir. "Bitince bana haber ver" der; sistem bitince müşteriye webhook gönderir.</li>
+  </ol>
+
+  <h3 id="tasks-zor">Neden zor? (mülakatta konuşulacak kısım)</h3>
+  <ul>
+    <li><b>Uzun sürüyor.</b> Bir task birkaç saniye de sürebilir, birkaç dakika da. Normal bir HTTP isteği bu kadar açık bekleyemez.</li>
+    <li><b>Kopmaya dayanmalı.</b> Kullanıcının bağlantısı, API sunucusu ya da worker ölebilir; yine de task kaybolmamalı. Bu yüzden çalıştıran (<a href="sozluk.html#agent-worker">agent worker</a>) ile yayın yapan (API + <a href="sozluk.html#stream">Redis stream</a>) ayrı tutuluyor.</li>
+    <li><b>Bir işi iki kez yapmamalı.</b> Worker çökerse ve başka worker devralırsa Jira'da iki ticket açılmamalı. Ödeme sistemlerindeki klasik "aynı işlem iki kez tetiklendi, iki kayıt oluştu" problemiyle aynı.</li>
+    <li><b>LLM pahalı ve limitli.</b> Her müşterinin bir token bütçesi var. Model sağlayıcı 429 dönebilir ya da çökebilir; o zaman yavaşla ya da yedek modele geç. (<a href="sozluk.html#llm-gateway">LLM gateway</a>)</li>
+    <li><b>Güvenlik.</b> Asistan kullanıcının yetkisinden fazlasını yapamamalı. Tool'lar kullanıcının kendi hesabıyla (OAuth) çalışıyor. (<a href="sozluk.html#tool-executor">Tool executor</a>)</li>
+  </ul>
+  <div class="note">Benzer bir pratik tasarım: <b>Spam Lookup</b>. Kullanıcı ekranın başında bekliyor, hız önemli. Pahalı ve korunması gereken kaynak bu sefer veritabanı değil, LLM.</div>
+
+  
+<h2 id="netlestirme">Netleştirme soruları</h2>
+<div class="table-wrap"><table>
+<tr><th>Sor</th><th>Varsayılan cevap</th><th>Neyi değiştirir?</th></tr>
+<tr><td>İstemciler kim?</td><td>Web (canlı akış ister), Slack botu, 3. parti API (bitince haber ister).</td><td>SSE + webhook.</td></tr>
+<tr><td>Bir task ne kadar sürer?</td><td>Birkaç saniye ile birkaç dakika.</td><td>HTTP isteğini açık tutma: 202 + arka plan.</td></tr>
+<tr><td>Bağlantı koparsa task devam etsin mi?</td><td>Evet; kullanıcı dönünce kaldığı yerden görmeli.</td><td>Çalıştıran ile yayın yapan ayrı; <code>Last-Event-ID</code>.</td></tr>
+<tr><td>Tool'lar yazma yapıyor mu?</td><td>Evet, ör. Jira'da ticket açmak.</td><td>Tool idempotency ve kullanıcı onayı.</td></tr>
+<tr><td>Kaç LLM sağlayıcı, limit var mı?</td><td>Birden fazla; her müşterinin token bütçesi var.</td><td>LLM gateway (follow-up).</td></tr>
+<tr><td>Geçmiş ve residency?</td><td>Konuşmalar saklanır; AB verisi AB'de kalır.</td><td>Yedek model de aynı bölgede olmalı.</td></tr>
+</table></div>
+<h2 id="gereksinim">Gereksinimler</h2>
+<div class="table-wrap"><table>
+<tr><th>Fonksiyonel</th><td>Task başlat · canlı olay akışı · kopunca kaldığı yerden devam · iptal · durum sorgulama · geçmiş · async mod + webhook · tool onayı.</td></tr>
+<tr><th>Fonksiyonel olmayan</th><td>İlk olay (model hariç platform süresi) p95 &lt; 500 ms · bağlantı kopsa da task kaybolmaz · yazan tool en fazla bir kez · tenant başına token bütçesi · deploy'lar task'ları öldürmez · %99.9.</td></tr>
+</table></div>
+<h2 id="olcek">Kaba ölçek</h2>
+<div class="table-wrap"><table>
+<tr><td>Task</td><td>200k kullanıcı × 10 task/gün = 2M/gün ≈ 23/sn; 09:00 tepesi ×5 ≈ 120/sn</td></tr>
+<tr><td>Açık akış</td><td>ort. 20 sn × 120/sn ≈ 2.400 eşzamanlı stream (uzun kuyrukla ~10k planla)</td></tr>
+<tr><td>Token</td><td>~3 model çağrısı × ~8k token ≈ 25k token/task → günde ~50 milyar token</td></tr>
+<tr><td>Olay</td><td>~300 olay/task × 120/sn ≈ 36k olay/sn tepe</td></tr>
+</table></div>
+<p><b>Çıkarım:</b> CPU değil; uzun açık bağlantılar, LLM kotası ve maliyeti, dayanıklı yürütme (çökme ya da deploy sonrası devam).</p>
+<div class="say">I want to separate the connection that streams to the client from the process that executes the task. Then a dropped connection or a deploy doesn't kill the task, and the client can resume from the last event it saw.</div>
+<nav class="pager"><a href="../index.html">← Playbook</a><a href="api.html">2 · API →</a></nav>
+</main>
+<footer>Kişisel çalışma notları. Senaryolar alıştırma amaçlıdır; şirket adları anonimleştirilmiştir.</footer>
+
+</body>
+</html>

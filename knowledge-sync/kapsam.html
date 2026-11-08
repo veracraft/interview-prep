@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Knowledge Sync · Kapsam</title>
+<link rel="stylesheet" href="../assets/site.css?v=11">
+</head>
+<body>
+<header class="topbar"><div class="topbar-inner">
+  <a class="brand" href="../index.html">Mülakat Hazırlığı</a>
+  <nav>
+    <a href="../index.html">Ana sayfa</a>
+    <a class="active" href="kapsam.html">Knowledge Sync</a>
+    <a href="../agent-tasks/kapsam.html">Agent Tasks</a>
+    <a href="../deployment-api/kapsam.html">Deployment API</a>
+  </nav>
+</div>
+<div class="subnav"><nav>
+    <a class="active" href="kapsam.html">1 · Kapsam</a>
+    <a href="api.html">2 · API</a>
+    <a href="cozum.html">3 · Minimum çözüm</a>
+    <a href="hata.html">4 · Hata ve güvenlik</a>
+    <a href="olcek.html">5 · Ölçek ve follow-up</a>
+    <a href="sozluk.html">Sözlük</a>
+    <a href="mock.html">Mock</a>
+</nav></div></header>
+
+<main class="wide">
+<h1>Knowledge Sync · 1. Kapsam</h1>
+<div class="step-hint"><b>Playbook 1/5 · Kapsam.</b> Ne yaparsın: kim kullanıyor, ana işlem ne, veri ne büyüklükte, ne kadar güncel olmalı? 5 dakikayı geçme. Gösterdiğin: doğru problemi çözdüğünü.</div>
+<h2 id="soru">Soru</h2>
+<div class="say">Our agent product lets enterprises connect sources like Google Drive, Confluence, SharePoint and Slack, so agents can answer questions using company knowledge. Design the API and the backend that keeps these sources in sync and makes the content searchable. Focus on the API and how you would run it in production.</div>
+<h2 id="urun">Ürün</h2>
+  <p>Bir şirket düşün; bilgisi her yere dağılmış: politikalar Google Drive'da, teknik dokümanlar wiki'de, kararlar Slack'te, müşteri bilgisi CRM'de. Çalışan bir şey sorduğunda beş yere bakması gerekiyor.</p>
+  <p>AI Company'nin agent ürünü bunu tek bir yapay zekâ asistanına dönüştürüyor. Çalışan "İsveç'te babalık izni kaç gün?" diye soruyor, asistan şirketin kendi dokümanlarından cevap veriyor ve kaynağı gösteriyor. Daha gelişmiş haliyle iş de yapıyor: "Bu müşteri için Jira'da bir ticket aç" dersin, açıyor.</p>
+  
+<p>Bu sistem asistanın şirket bilgisini <b>önceden</b> bilmesini sağlar: kaynakları bağlar, içeriği ve izinleri güncel tutar, izinlere göre aranabilir yapar.</p>
+<h3>Basit hali</h3>
+  <p>Kütüphaneye kitap getiren bölüm gibi düşün. Admin "Google Drive'ımızı bağla" diyor; sistem oradaki dokümanları okuyor, düzenliyor ve aranabilir hale getiriyor. Drive'da bir şey değişince kopyayı da güncelliyor.</p>
+  <p>Kullanıcı bu API'yi neredeyse hiç görmez; onu şirketin IT admini kullanır.</p>
+
+  <h3 id="sources-akis">Ürün olarak akış</h3>
+  <ol>
+    <li><b>Bağlama.</b> Admin ayarlar ekranında "Google Drive bağla"ya basıyor, Google'a giriş yapıp izin veriyor. → <code>POST /v1/sources</code></li>
+    <li><b>İlk senkronizasyon.</b> Sistem Drive'daki her şeyi okumaya başlıyor. 500 bin doküman olabilir, saatler sürebilir. Admin'e "Başladı" denir. → <code>POST /v1/sources/{id}/syncs</code> → <b>202 Accepted</b></li>
+    <li><b>İlerlemeyi izleme.</b> Admin ekranda "3.100 / 5.200 doküman işlendi, 7 hata" görür. → <code>GET /v1/syncs/{id}</code></li>
+    <li><b>Sürekli güncel kalma.</b> Biri Drive'da dosya düzenlediğinde, sildiğinde ya da birinin erişimini kaldırdığında bu değişiklik de içeri alınır (<a href="sozluk.html#webhook">webhook</a> veya periyodik kontrol).</li>
+    <li><b>Arama.</b> Çalışan soru sorduğunda bu bilgiden sadece kendi görebildiği dokümanlar aranır. → <code>POST /v1/search</code></li>
+    <li><b>Bağlantıyı kesme.</b> Admin Drive bağlantısını kaldırırsa o kaynaktan gelen bütün veri silinir. → <code>DELETE /v1/sources/{id}</code></li>
+  </ol>
+
+  <h3 id="sources-zor">Neden zor? (mülakatta konuşulacak kısım)</h3>
+  <ul>
+    <li><b>Uzun sürüyor.</b> Bu yüzden API işi yapmıyor, sadece "tamam, sıraya aldım" (202) diyor. İşi arkada <a href="sozluk.html#sync-worker">worker</a> yapıyor.</li>
+    <li><b>İzinler kritik.</b> Muhasebe klasörünü sadece muhasebeciler görebiliyorsa, asistan da o dokümanı başkasına göstermemeli. Kaynakta biri erişimden çıkarılırsa bu değişiklik dakikalar içinde yansımalı. (<a href="sozluk.html#acl">ACL</a>)</li>
+    <li><b>Kaynaklar seni sınırlıyor.</b> Google "dakikada şu kadar istek" der, fazlasında 429 döner. Yavaşlamayı ve tekrar denemeyi bilmen gerekiyor.</li>
+    <li><b>Büyük müşteri diğerlerini bekletmemeli.</b> 5 milyon dokümanlık bir müşteri yeni bağlandığında, küçük müşterilerin güncellemeleri sıraya takılmamalı.</li>
+    <li><b>Maliyet.</b> Dokümanı aranabilir hale getirmek (<a href="sozluk.html#embedding">embedding</a>) para tutuyor. İçerik değişmediyse tekrar işlenmemeli.</li>
+  </ul>
+  <div class="note">Benzer bir pratik tasarım: <b>Contact Sync</b>. Kullanıcı telefon rehberini yüklüyordu; burada şirket dokümanlarını yüklüyor. Mantık aynı: yazma ağırlıklı, kuyruk + worker + idempotent upsert.</div>
+
+  
+<h2 id="netlestirme">Netleştirme soruları</h2>
+<div class="table-wrap"><table>
+<tr><th>Sor</th><th>Varsayılan cevap</th><th>Neyi değiştirir?</th></tr>
+<tr><td>API'yi kim kullanıyor?</td><td>Admin UI (bağlama, sync), agent ve kullanıcılar (arama), bazı müşteriler doğrudan API'den.</td><td>İki yüz: yönetim ve arama; roller.</td></tr>
+<tr><td>Kaç tenant, en büyüğü ne kadar?</td><td>500 tenant, ortalama 300k doküman, en büyüğü 5M.</td><td>Tenant'lar arası adalet ve onboarding dalgası.</td></tr>
+<tr><td>Ne kadar güncel olmalı?</td><td>Değişiklik p95 10 dakikada aranabilir.</td><td>Polling yeter mi, webhook gerekir mi?</td></tr>
+<tr><td>İzinler?</td><td>Kullanıcı sadece kaynakta görebildiğini görür; erişim iptali 5 dakikada yansır.</td><td><code>document_acl</code> ve öncelikli şerit.</td></tr>
+<tr><td>Kaynak kotaları, webhook?</td><td>Kotalar var (429); bazı kaynaklar webhook destekliyor.</td><td>Token bucket; webhook follow-up.</td></tr>
+<tr><td>Arama kapsamda mı?</td><td>Evet, izin farkındalıklı arama. Cevap üretimi (LLM) değil.</td><td><code>POST /v1/search</code>.</td></tr>
+<tr><td>Data residency?</td><td>AB müşterisinin verisi AB'de kalır.</td><td>Bölge seçimi.</td></tr>
+</table></div>
+<h2 id="gereksinim">Gereksinimler</h2>
+<div class="table-wrap"><table>
+<tr><th>Fonksiyonel</th><td>Admin kaynak bağlar (OAuth) ve kapsamı seçer · ilk tam sync, sonra artımlı · sync durumu ve hataları görünür · izin farkındalıklı arama · bağlantı silinince veri temizlenir.</td></tr>
+<tr><th>Fonksiyonel olmayan</th><td>Artımlı tazelik p95 &lt; 10 dk · izin iptali p99 &lt; 5 dk · arama p95 &lt; 300 ms · API %99.9 · tenant'lar arası sızıntı sıfır · tenant'lar arası adalet.</td></tr>
+<tr><th>Kapsam dışı</th><td>Cevap üretimi (Agent Tasks), faturalama, kaynak bağlama arayüzü, arama sıralamasının iç detayı.</td></tr>
+</table></div>
+<h2 id="olcek">Kaba ölçek</h2>
+<div class="table-wrap"><table>
+<tr><td>Tenant</td><td>500 kurumsal müşteri</td></tr>
+<tr><td>Doküman</td><td>ort. 300k / tenant → 150M; en büyüğü 5M</td></tr>
+<tr><td>Değişim</td><td>günde %1 → 1,5M/gün ≈ 17/sn; mesai tepesi ×5 ≈ 90/sn</td></tr>
+<tr><td>Onboarding dalgası</td><td>5M doküman 24 saatte → tek tenant için ~60 doküman/sn</td></tr>
+<tr><td>Arama</td><td>200k kullanıcı × 20 sorgu = 4M/gün ≈ 50 rps; tepe ~250 rps</td></tr>
+</table></div>
+<p><b>Çıkarım:</b> darboğaz QPS değil; kaynak API kotaları, izin doğruluğu ve tenant'lar arası adalet.</p>
+<div class="say">The interesting problems here are not QPS. They're permission correctness, fairness between tenants and source API quotas. I'll design the API first, then the pipeline around those.</div>
+<nav class="pager"><a href="../index.html">← Playbook</a><a href="api.html">2 · API →</a></nav>
+</main>
+<footer>Kişisel çalışma notları. Senaryolar alıştırma amaçlıdır; şirket adları anonimleştirilmiştir.</footer>
+
+</body>
+</html>

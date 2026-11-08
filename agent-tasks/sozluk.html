@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Tasks · Sözlük</title>
+<link rel="stylesheet" href="../assets/site.css?v=11">
+</head>
+<body>
+<header class="topbar"><div class="topbar-inner">
+  <a class="brand" href="../index.html">Mülakat Hazırlığı</a>
+  <nav>
+    <a href="../index.html">Ana sayfa</a>
+    <a href="../knowledge-sync/kapsam.html">Knowledge Sync</a>
+    <a class="active" href="kapsam.html">Agent Tasks</a>
+    <a href="../deployment-api/kapsam.html">Deployment API</a>
+  </nav>
+</div>
+<div class="subnav"><nav>
+    <a href="kapsam.html">1 · Kapsam</a>
+    <a href="api.html">2 · API</a>
+    <a href="cozum.html">3 · Minimum çözüm</a>
+    <a href="hata.html">4 · Hata ve güvenlik</a>
+    <a href="olcek.html">5 · Ölçek ve follow-up</a>
+    <a class="active" href="sozluk.html">Sözlük</a>
+    <a href="mock.html">Mock</a>
+</nav></div></header>
+
+<main>
+<h1>Agent Tasks · Sözlük</h1>
+<p class="lead">Sadece bu sistemin diyagramındaki kavramlar, diyagramdaki sıraya göre. Her biri için: ne olduğu, bizdeki görevi, <b>hangi problemi çözdüğü, neden şimdi gerektiği, daha basit alternatifi</b> ve söyleyeceğin İngilizce cümle (🗣).</p>
+<label for="q" class="small muted">Ara (Türkçe ya da İngilizce):</label>
+<input id="q" class="search" type="search" placeholder="ör. kuyruk, idempotent, izin" autocomplete="off">
+<p id="count" class="small muted"></p>
+<nav class="toc"><b>Kavramlar</b><ol><li><a href="#gateway">Gateway</a></li><li><a href="#api">API</a></li><li><a href="#lro">202 Accepted ve uzun süren iş</a></li><li><a href="#task">Task</a></li><li><a href="#idempotency">Idempotency</a></li><li><a href="#postgres">Postgres</a></li><li><a href="#pending-events">pending_events ve event publisher</a></li><li><a href="#kafka">Kafka topic</a></li><li><a href="#agent-worker">Agent worker</a></li><li><a href="#llm-provider">LLM provider</a></li><li><a href="#tool-executor">Tool executor</a></li><li><a href="#stream">Redis stream ve SSE</a></li><li><a href="#llm-gateway">LLM gateway</a></li></ol></nav>
+<section class="term" id="gateway" data-k="gateway jwt oidc sso rate limit envoy güvenlik turnike ">
+<h3>Gateway <a class="anchor" href="#gateway">#</a></h3><div class="tags"><span class="tag a">Aşama 1</span></div>
+<dl class="kv"><dt>Ne?</dt><dd>API'lerin önündeki güvenlik görevlisi. Her isteği API'ye ulaşmadan kontrol eder.</dd><dt>Benzetme</dt><dd>Binanın girişindeki turnike ve güvenlik.</dd><dt>Bizde</dt><dd>Web, Slack ve API isteklerinde JWT'yi doğrular, istek limiti uygular. SSE bağlantıları da buradan geçer; idle timeout'u uzun akışlara göre ayarlanır.</dd></dl>
+<div class="decide"><div><b>Hangi problemi çözüyor?</b> Kimlik doğrulama, rate limit ve istek boyutu sınırı tek yerde.</div><div><b>Neden şimdi?</b> 1. aşama: güvenlik sonraya bırakılmaz.</div><div><b>Daha basit alternatif:</b> Her serviste aynı middleware (az servis varken yeter).</div><div><b>Bedeli:</b> Bir ağ adımı daha; yanlış ayar tüm trafiği etkiler.</div></div>
+<div class="say">The gateway handles cross-cutting concerns once: token validation, rate limits, request size. So every service doesn't reimplement them.</div>
+</section>
+<section class="term" id="api" data-k="api stateless hpa garson kapı ">
+<h3>API <span class="muted small">(Agent Tasks API)</span> <a class="anchor" href="#api">#</a></h3><div class="tags"><span class="tag a">Aşama 1, 4</span></div>
+<dl class="kv"><dt>Ne?</dt><dd>Dış dünyanın sistemle konuştuğu kapı. HTTP istekleri alır, kontrol eder ve cevap döner.</dd><dt>Benzetme</dt><dd>Restorandaki garson. Siparişi alır, deftere yazar, "tamam, hazırlanıyor" der. Yemeği kendisi pişirmez.</dd><dt>Bizde</dt><dd>Agent Tasks API. Task'ı kaydeder ve 202 döner; 4. aşamada canlı akışı Redis stream'den okuyup SSE ile istemciye iletir. Task'ı kendisi çalıştırmaz.</dd><dt>Stateless</dt><dd>API kendi içinde bir şey hatırlamaz, her şey Postgres'te. Bu yüzden 1 pod da çalışabilir, 20 pod da; Kubernetes yük artınca pod ekler (HPA).</dd></dl>
+<div class="decide"><div><b>Hangi problemi çözüyor?</b> İstemciye net bir sözleşme; isteği doğrulayıp kalıcı kaydetmek.</div><div><b>Neden şimdi?</b> 1. aşama: o olmadan sistem yok.</div><div><b>Daha basit alternatif:</b> Yok; istemcinin doğrudan veritabanına yazması kabul edilemez.</div><div><b>Bedeli:</b> Ağır işi içinde yaparsa timeout; stateless tutulmalı.</div></div>
+<div class="say">The API layer is stateless. It validates the request, records it durably, and returns 202. The heavy work happens in workers.</div>
+</section>
+<section class="term" id="lro" data-k="202 accepted long running operation lro polling status uzun süren location ">
+<h3>202 Accepted ve uzun süren iş <a class="anchor" href="#lro">#</a></h3><div class="tags"><span class="tag a">Aşama 1</span></div>
+<dl class="kv"><dt>Ne?</dt><dd>"İsteğini aldım ve kaydettim, ama iş henüz bitmedi" demek. Cevapta işin durumunu sorgulayabileceğin bir adres döner (<code>Location</code> header'ı).</dd><dt>Benzetme</dt><dd>Kuru temizlemecinin fişi. Elbiseyi bıraktın, fişi aldın; ne zaman hazır olduğunu fişle sorarsın.</dd><dt>Bizde</dt><dd>Task saniyeler ile dakikalar arası sürer. İstemci <code>GET /v1/tasks/{id}</code> ile sorar ya da SSE ile canlı izler; entegrasyonlar bitince webhook ister.</dd><dt>Dikkat</dt><dd>202 dönmeden önce iş <b>kalıcı olarak kaydedilmiş</b> olmalı. Kaydetmediğin işi kabul etme.</dd></dl>
+
+<div class="say">This operation can take minutes, so instead of holding the request open I return 202 with a status resource the client can poll.</div>
+</section>
+<section class="term" id="task" data-k="task görev run çalışma state machine durum requires_action">
+<h3>Task <a class="anchor" href="#task">#</a></h3><div class="tags"><span class="tag a">Aşama 1</span></div>
+<dl class="kv"><dt>Ne?</dt><dd>Asistanın tek bir çalışması: soru + düşünme + tool kullanımı + cevap.</dd><dt>Durumlar</dt><dd><code>queued → running ⇄ requires_action → completed | failed | cancelled</code>. <code>requires_action</code>: kullanıcı onayı bekleniyor. Geçişler tek yerde tanımlı, terminal durumlardan çıkış yok.</dd><dt>Kural</dt><dd>Konuşma başına tek aktif task: mesaj sırası bozulmasın.</dd></dl>
+
+<div class="say">A task is a long-running operation with an explicit state machine, and only one task can be active per conversation.</div>
+</section>
+<section class="term" id="idempotency" data-k="idempotency idempotent tekrar retry idempotency-key duplicate tekrarlı ">
+<h3>Idempotency <a class="anchor" href="#idempotency">#</a></h3><div class="tags"><span class="tag a">Aşama 1, 3</span></div>
+<dl class="kv"><dt>Ne?</dt><dd>Aynı isteği bir kez de yapsan, beş kez de yapsan sonuç aynı kalır.</dd><dt>Benzetme</dt><dd>Asansör düğmesi. Beş kez bassan da asansör bir kez gelir.</dd><dt>Bizde iki ayrı tane</dt><dd><b>Task oluşturma:</b> <code>Idempotency-Key</code> → aynı task. <b>Tool çağrısı:</b> <code>side_effect_key</code> → Jira'da tek ticket. Farkları: <a href="hata.html#idem-fark">task ve tool idempotency →</a></dd><dt>Gerçek hayattan</dt><dd>Ödeme sistemlerinde aynı işlem iki farklı yoldan tetiklenirse iki müşteri kaydı ya da iki fatura oluşabilir. Çözüm önce tasarımda: her yan etkinin <b>tek bir sahibi</b> olsun; idempotency key bunun üstüne güvenlik ağı.</dd></dl>
+
+<div class="say">Clients will retry, so every mutating call accepts an Idempotency-Key. And each side effect has exactly one owner, with the key as a safety net.</div>
+</section>
+<section class="term" id="postgres" data-k="postgres veritabanı database transaction unique constraint kalıcı ">
+<h3>Postgres <a class="anchor" href="#postgres">#</a></h3><div class="tags"><span class="tag a">Aşama 1</span></div>
+<dl class="kv"><dt>Ne?</dt><dd>Ana veritabanı. Kalıcı ve doğru olması gereken her şey burada.</dd><dt>Bizde</dt><dd><code>tasks</code>, <code>messages</code>, <code>pending_events</code> (+ 3. aşamada <code>tool_calls</code>). Checkpoint'ler de burada. <a href="cozum.html#veri">Örnek satırlar →</a></dd><dt>Neden</dt><dd>Transaction ve unique constraint ile doğruluğu garanti eder. Başka bir veritabanını (ör. Cassandra) ancak gerçek bir yazma sınırına ulaşınca önerirsin.</dd><dt>Multi-tenant</dt><dd>Her tabloda <code>tenant_id</code>; bir müşteri asla başka müşterinin verisini görmemeli. <a href="../ortak.html#tenant">Katmanlar →</a></dd></dl>
+<div class="decide"><div><b>Hangi problemi çözüyor?</b> Kalıcı ve doğru durum; unique ve transaction ile kuralları veritabanı garanti eder.</div><div><b>Neden şimdi?</b> 1. aşama.</div><div><b>Daha basit alternatif:</b> Bu zaten en basit seçenek. Başka veritabanı ancak gerçek bir yazma sınırında.</div><div><b>Bedeli:</b> Tek yazma noktası; büyüyünce read replica ve partition.</div></div>
+<div class="say">Postgres is the source of truth. Uniqueness and state transitions are enforced there, not just in application code.</div>
+</section>
+<section class="term" id="pending-events" data-k="pending_events pending events event publisher outbox transactional outbox relay transaction kesikli ok kuyruk mesaj kaybolma ">
+<h3>pending_events ve event publisher <span class="muted small">(diyagramdaki kesikli ok)</span> <a class="anchor" href="#pending-events">#</a></h3><div class="tags"><span class="tag a">Aşama 2</span></div>
+<dl class="kv"><dt>Ne?</dt><dd>Veritabanına yazarken, aynı transaction içinde "bunu kuyruğa gönder" notunu da <code>pending_events</code> tablosuna yazmak. Ayrı bir süreç (<b>event publisher</b>) bu satırları okuyup kuyruğa gönderir, sonra "gönderildi" diye işaretler.</dd><dt>Neden</dt><dd>"Önce DB'ye yaz, sonra kuyruğa gönder" dersen, arada çökersen iş kaydedilmiş ama hiç yapılmamış olur. pending_events ile ikisi aynı anda olur ya da hiç olmaz.</dd><dt>Benzetme</dt><dd>Garson siparişi deftere yazarken mutfak fişini de aynı anda yazar; biri yazılıp diğeri unutulamaz. Event publisher, fişleri mutfağa taşıyan komidir.</dd><dt>Literatürdeki adı</dt><dd>Bu desenin yaygın adı <b>transactional outbox</b>; tabloya "outbox", publisher'a "relay" de denir. Mülakatçı bu kelimeleri kullanırsa aynı şeyden bahsediyor.</dd><dt>Nerede çalışır?</dt><dd>Aynı repoda, API'den ayrı bir süreç: <code>cmd/api</code>, <code>cmd/event-publisher</code>, <code>cmd/agent-worker</code>. <a href="../ortak.html#publisher">Detay →</a></dd></dl>
+<div class="decide"><div><b>Hangi problemi çözüyor?</b> Veritabanına yazıp kuyruğa mesajı kaybetme riski.</div><div><b>Neden şimdi?</b> 2. aşama: Kafka ile birlikte.</div><div><b>Daha basit alternatif:</b> Kuyruk yok: worker işi doğrudan Postgres'ten <code>SKIP LOCKED</code> ile alır.</div><div><b>Bedeli:</b> Ek tablo ve süreç; mesaj iki kez gidebilir, tüketici idempotent olmalı.</div></div>
+<div class="say">I write the job and a pending_events row in the same transaction, and an event publisher sends it to the queue. This is the transactional outbox pattern. The publisher may send twice, so consumers are idempotent.</div>
+</section>
+<section class="term" id="kafka" data-k="kafka topic partition key consumer group offset commit kuyruk queue pub/sub at-least-once retry dead letter dlt dlq task-queue">
+<h3>Kafka topic <span class="muted small">(kuyruk)</span> <a class="anchor" href="#kafka">#</a></h3><div class="tags"><span class="tag a">Aşama 2</span></div>
+<dl class="kv"><dt>Ne?</dt><dd>Mesajların sırayla eklendiği kalıcı bir kayıt defteri (log). Bir taraf topic'e yazar, diğer taraf (worker) okur.</dd><dt>Benzetme</dt><dd>Restoranda garsonla mutfak arasındaki sipariş defteri. Sayfalar yırtılmaz; her aşçı "en son kaçıncı siparişte kaldım" numarasını (offset) tutar.</dd><dt>Neden</dt><dd>API ile worker'ı ayırır. Ani yükü emer; worker yetişemese bile istek kaybolmaz, çöken worker'ın işini başkası devralır.</dd><dt>Bizde</dt><dd><code>task-queue</code> (key = <code>task_id</code>). <a href="cozum.html#veri">Örnek mesaj →</a></dd><dt>Bilmen gerekenler</dt><dd><ul><li><b>Partition ve key:</b> Aynı key hep aynı partition'a gider, sırası korunur. Paralellik partition sayısı kadardır; bir partition'ı aynı anda bir consumer okur.</li><li><b>Consumer group ve offset:</b> Worker'lar bir grup olarak okur; iş bitince offset commit edilir. Commit etmeden ölürse mesaj tekrar okunur. Yani at-least-once: işlem <a href="#idempotency">idempotent</a> olmalı.</li><li><b>Retry ve dead-letter topic:</b> Kafka'da mesaj başına "ack/nack" yok. Başarısız mesaj retry topic'ine, defalarca başarısızsa dead-letter topic'e (DLT) yazılır ve alarm çalar; partition tıkanmaz.</li><li><b>Uzun işler:</b> Task dakikalar sürebilir. Worker mesajı alır, Postgres'te lease yazar ve offset'i hemen commit eder; iş Postgres'teki durumdan ilerler. Yoksa uzun iş partition'ı tıkar ve worker gruptan atılır (<code>max.poll.interval.ms</code>).</li></ul></dd></dl>
+<div class="decide"><div><b>Hangi problemi çözüyor?</b> Task'ı kabul etmeyi çalıştırmaktan ayırmak; tepe yükü (sabah 09:00) emmek.</div><div><b>Neden şimdi?</b> İlk çözümde, Knowledge Sync ile aynı altyapı. Dürüst not: saniyede ~120 task için Postgres iş tablosu da yeterdi.</div><div><b>Daha basit alternatif:</b> Postgres iş tablosu + <code>SKIP LOCKED</code>.</div><div><b>Bedeli:</b> İşletme yükü; uzun iş için lease + erken offset commit gerekir.</div></div>
+<div class="say">The topic decouples accepting work from doing it. Same key goes to the same partition, so order is kept per key. Delivery is at-least-once, so consumers are idempotent, and failing messages go to a retry topic and then a dead-letter topic.</div>
+</section>
+<section class="term" id="agent-worker" data-k="agent worker lease generation fencing checkpoint devralma döngü">
+<h3>Agent worker <a class="anchor" href="#agent-worker">#</a></h3><div class="tags"><span class="tag a">Aşama 2</span></div>
+<dl class="kv"><dt>Ne?</dt><dd>Asistanın asıl çalıştığı yer. Bir döngü içinde çalışır: modele sor → model "şu tool'u çağır" derse çağır → sonucu modele ver → model cevap verene kadar tekrarla.</dd><dt>Lease</dt><dd>Worker task'ı "kiralar": "Bu task'ı 30 saniyeliğine ben çalıştırıyorum" der ve 10 saniyede bir yeniler. Worker ölürse kira biter, başka worker devralır. Aynı task'ı iki worker aynı anda çalıştırmaz.</dd><dt>Generation</dt><dd>Fencing token. Her devralmada artan bir numara. Eski worker geç uyanıp bir şey yazmaya çalışırsa veritabanı "senin numaran eski" deyip reddeder.</dd><dt>Checkpoint</dt><dd>Her adımdan sonra durumu Postgres'e kaydeder. Devralan worker baştan değil, kaldığı yerden başlar.</dd></dl>
+<div class="decide"><div><b>Hangi problemi çözüyor?</b> Dakikalar süren task'ı API pod'undan bağımsız, kaldığı yerden devam ederek çalıştırmak.</div><div><b>Neden şimdi?</b> 2. aşama.</div><div><b>Daha basit alternatif:</b> Task'ı API pod'unda çalıştırmak: deploy ya da kopma task'ı öldürür.</div><div><b>Bedeli:</b> Lease ve generation karmaşıklığı.</div></div>
+<div class="say">A worker claims a task with a lease and checkpoints after every step. If it dies, another worker takes over from the last checkpoint, and a generation number rejects writes from the old one.</div>
+</section>
+<section class="term" id="llm-provider" data-k="llm provider model sağlayıcı anthropic openai token">
+<h3>LLM provider <a class="anchor" href="#llm-provider">#</a></h3><div class="tags"><span class="tag a">Aşama 2</span></div>
+<dl class="kv"><dt>Ne?</dt><dd>Modelin kendisini sunan dış servis. Biz ona HTTP ile istek atarız.</dd><dt>Özellikleri</dt><dd>Yavaştır (saniyeler), pahalıdır (token başına ödeme), limitlidir (dakikada şu kadar token) ve bazen çöker.</dd></dl>
+
+<div class="say">The model provider is an external, slow, expensive and rate-limited dependency, so I treat it like any critical third-party API.</div>
+</section>
+<section class="term" id="tool-executor" data-k="tool executor araç jira crm oauth timeout onay approval prompt injection yan etki side_effect_key">
+<h3>Tool executor <a class="anchor" href="#tool-executor">#</a></h3><div class="tags"><span class="tag a">Aşama 3</span></div>
+<dl class="kv"><dt>Ne?</dt><dd>Modelin "şu aracı kullan" isteğini gerçekten yerine getiren bileşen: arama, Jira'da ticket açma, CRM'den veri çekme.</dd><dt>Kurallar</dt><dd><ul><li><b>Timeout:</b> Her çağrının süre sınırı var.</li><li><b>Kullanıcının yetkisi:</b> Tool, kullanıcının kendi OAuth token'ıyla çalışır. Kullanıcının göremediğini asistan da göremez.</li><li><b>Yazan tool'lar:</b> Ticket açmak, e-posta göndermek geri alınamaz. <code>side_effect_key</code> ve gerekirse kullanıcı onayı; onay tam parametrelere bağlı.</li><li><b>Belirsizlik:</b> Timeout olduysa ticket açılmış da olabilir. Körlemesine tekrar denenmez; önce kontrol edilir.</li><li><b>Prompt injection:</b> Tool çıktısı güvenilmeyen veri, talimat değil.</li></ul></dd></dl>
+<div class="decide"><div><b>Hangi problemi çözüyor?</b> Dış uygulama çağrılarını kullanıcının yetkisiyle, timeout ve idempotency ile yapmak.</div><div><b>Neden şimdi?</b> 3. aşama: tool çağrıları gelince.</div><div><b>Daha basit alternatif:</b> Worker içinde doğrudan çağrı.</div><div><b>Bedeli:</b> Ayrı bileşeni işletmek; karşılığında yetki kontrolü tek yerde.</div></div>
+<div class="say">Tools run with the user's own permissions and strict timeouts. For tools that change something, I record the intent first and pass an idempotency key, because after a timeout I can't know whether the action happened.</div>
+</section>
+<section class="term" id="stream" data-k="redis stream sse server-sent events canlı akış last-event-id websocket streaming ilerleme progress">
+<h3>Redis stream ve SSE <span class="muted small">(canlı akış)</span> <a class="anchor" href="#stream">#</a></h3><div class="tags"><span class="tag a">Aşama 4</span></div>
+<dl class="kv"><dt>SSE</dt><dd>Server-Sent Events: sunucudan tarayıcıya tek yönlü ve sürekli akan bir HTTP bağlantısı. Cevabın harf harf gelmesi böyle çalışır.</dd><dt>Redis stream</dt><dd>Sıra numaralı olayların tutulduğu geçici bir günlük (<code>t:{tenant}:task:{id}:events</code>, 24 saat). Worker yazar, API okuyup SSE ile istemciye iletir.</dd><dt>Neden Redis</dt><dd>Worker ile kullanıcının bağlı olduğu API pod'u farklı makineler. Redis ikisinin buluşma noktası. Bağlantı koparsa istemci "en son 41 numaralı olayı gördüm" der (<code>Last-Event-ID</code>) ve 42'den devam eder.</dd><dt>WebSocket neden değil</dt><dd>Akış tek yönlü; SSE düz HTTP olduğu için gateway ve load balancer ile sorunsuz çalışır.</dd><dt>Dikkat</dt><dd>Stream kalıcı geçmiş değildir; saklama süresi geçmişse 410 döner, istemci güncel task durumunu çeker. <a href="cozum.html#canli">Kullanıcı ne görür? →</a></dd></dl>
+<div class="decide"><div><b>Hangi problemi çözüyor?</b> Canlı akış; bağlantı koparsa kaldığı yerden devam; hangi API pod'u olduğu önemsiz.</div><div><b>Neden şimdi?</b> 4. aşama: kullanıcı cevabı akarken görmek ister (soruda var).</div><div><b>Daha basit alternatif:</b> Polling: <code>GET /tasks/{id}</code>.</div><div><b>Bedeli:</b> Redis'e bağımlılık; saklama süresi dolunca istemci güncel durumu çeker (410).</div></div>
+<div class="say">The worker appends numbered events to a Redis stream, and the API streams them to the client over SSE. If the connection drops, the client resumes with Last-Event-ID, and the task keeps going either way.</div>
+</section>
+<section class="term" id="llm-gateway" data-k="llm gateway bütçe budget fallback circuit breaker retry backoff maliyet cost redis">
+<h3>LLM gateway <a class="anchor" href="#llm-gateway">#</a></h3><div class="tags"><span class="tag a">Aşama 5</span></div>
+<dl class="kv"><dt>Ne?</dt><dd>Worker'lar ile model sağlayıcı arasında duran, bizim yazdığımız ince bir katman.</dd><dt>Benzetme</dt><dd>Şirketin kurumsal kredi kartı yöneticisi. Kim ne kadar harcayabilir, limit dolarsa ne olur, bir banka çalışmazsa hangisine geçilir, hepsine o karar verir.</dd><dt>Ne yapar</dt><dd><ul><li><b>Token bütçesi:</b> Her müşterinin dakikalık ve günlük limiti var (sayaç Redis'te: <code>budget:{tenant}:{gün}</code>).</li><li><b>Retry ve backoff:</b> Sağlayıcı 429 dönerse bekleyip tekrar dener.</li><li><b>Fallback:</b> Bir model çökerse başka modele geçer; aynı veri lokasyonu kuralına uyarak (EU verisi EU'da kalır).</li><li><b>Circuit breaker:</b> Sağlayıcı sürekli hata veriyorsa bir süre denemeyi bırakır.</li><li><b>Maliyet ölçümü:</b> Hangi müşteri ne kadar token harcadı.</li></ul></dd></dl>
+<div class="decide"><div><b>Hangi problemi çözüyor?</b> Tenant bütçesi, sağlayıcı hatalarında backoff ve fallback, maliyet ölçümü tek yerde.</div><div><b>Neden şimdi?</b> Follow-up (5. aşama): bir müşteri limiti zorlarsa ya da sağlayıcı sorun çıkarırsa.</div><div><b>Daha basit alternatif:</b> Worker içinde istemci kütüphanesiyle retry ve basit sayaç.</div><div><b>Bedeli:</b> Kritik yolda bir adım daha; kendisi tek hata noktası olmamalı.</div></div>
+<div class="say">All model calls go through one LLM gateway: per-tenant token budgets, retries with backoff, fallback models that respect data residency, a circuit breaker, and cost tracking.</div>
+</section>
+<nav class="pager"><a href="olcek.html">← 5 · Ölçek ve follow-up</a><a href="mock.html">Mock →</a></nav>
+</main>
+<footer>Kişisel çalışma notları. Senaryolar alıştırma amaçlıdır; şirket adları anonimleştirilmiştir.</footer>
+<script>
+(function () {
+  const q = document.getElementById('q');
+  const terms = Array.from(document.querySelectorAll('.term'));
+  const count = document.getElementById('count');
+  const norm = s => s.toLocaleLowerCase('tr');
+  q.addEventListener('input', () => {
+    const v = norm(q.value.trim());
+    let n = 0;
+    terms.forEach(t => {
+      const hit = !v || norm(t.textContent + ' ' + (t.dataset.k || '')).includes(v);
+      t.classList.toggle('hidden', !hit);
+      if (hit) n++;
+    });
+    count.textContent = v ? n + ' kavram bulundu' : '';
+  });
+})();
+</script>
+</body>
+</html>

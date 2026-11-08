@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mülakat Hazırlığı · API ve Mimari</title>
+<link rel="stylesheet" href="assets/site.css?v=11">
+<script src="assets/diagrams.js?v=11"></script>
+</head>
+<body>
+<header class="topbar"><div class="topbar-inner">
+  <a class="brand" href="index.html">Mülakat Hazırlığı</a>
+  <nav>
+    <a class="active" href="index.html">Ana sayfa</a>
+    <a href="knowledge-sync/kapsam.html">Knowledge Sync</a>
+    <a href="agent-tasks/kapsam.html">Agent Tasks</a>
+    <a href="deployment-api/kapsam.html">Deployment API</a>
+  </nav>
+</div>
+<div class="subnav"><nav>
+    <a class="active" href="index.html">Playbook</a>
+    <a href="plan.html">Bugünün planı</a>
+    <a href="anlatim.html">Nasıl anlatırım?</a>
+    <a href="sorular.html">Genel takip soruları</a>
+    <a href="ortak.html">Ortak konular</a>
+    <a href="index.html#paket">Baskı paketi</a>
+</nav></div></header>
+
+<main class="wide">
+<h1>Mülakat hazırlığı: API ve mimari</h1>
+<p class="lead">Bir AI şirketinde Infrastructure Engineer pozisyonunun <i>API Development &amp; Solutions Design</i> turu için Türkçe çalışma notları. Üç sistem var; her biri mülakat playbook'unun sırasıyla ilerliyor.</p>
+<div class="note small"><b>Nasıl kullanılır?</b> Üstten bir sistem seç. Alt menüdeki <b>1 → 5</b> sırası mülakattaki sırayla aynı; her sayfanın sonunda "sonraki adım" linki var. Diyagramdaki kutulara ve tablo satırlarına tıklayınca ilgili açıklama açılır.</div>
+<div class="grid">
+  <a class="card" href="knowledge-sync/kapsam.html"><div class="num">Sistem 1 · yazma ağırlıklı</div><h3>Knowledge Sync</h3><p>Şirket dokümanlarını ve izinlerini Drive, Slack gibi kaynaklardan içeri alır, izinlere göre aranabilir yapar. Zor kısım: izin doğruluğu, kaynak kotaları, tenant'lar arası adalet.</p></a>
+  <a class="card" href="agent-tasks/kapsam.html"><div class="num">Sistem 2 · gecikmeye duyarlı</div><h3>Agent Tasks</h3><p>Kullanıcının asistana verdiği görevi çalıştırır, cevabı canlı akıtır, tool çağırır. Zor kısım: uzun iş, kopmaya dayanıklılık, tool'ların iki kez çalışmaması, LLM maliyeti.</p></a>
+  <a class="card" href="deployment-api/kapsam.html"><div class="num">Sistem 3 · infra rolüne en yakın</div><h3>Deployment API</h3><p>Takımlar servislerini bir iç API ile deploy eder: canary, otomatik rollback, prod onayı. Zor kısım ölçek değil: doğruluk ve güvenlik.</p></a>
+</div>
+<h2 id="akis">Playbook: önce ne, sonra ne?</h2>
+<p class="small muted">Butonlarla adım adım ilerle. Her adımın altında üç sistemdeki karşılığına link var.</p>
+<div class="diagram" id="flowS" data-all="Kapsam → API → minimum çözüm → hata ve güvenlik → ölçek. İlk üç adımı sen yönetirsin; sonrasını mülakatçının soruları.">
+  <div class="pills"></div>
+  <div class="flow"><div class="flow-card stg" data-s="1" data-e="9" style="border-left:3px solid #AFA9EC"><h3>1 · Kapsam<span class="time">~5 dk</span></h3><ul><li>Kim kullanıyor, ana işlem ne, veri ne büyüklükte, ne kadar güncel olmalı?</li><li>Kapsamı tek cümleyle geri söyle; sayıları kabaca ver.</li></ul><div class="small"><b>Gösterdiğin:</b> Doğru problemi çözdüğünü.</div><div class="say">Let me check I got the scope right: … The hard parts are … I'll start with the API.</div><div class="small">Bu adım: <a href="knowledge-sync/kapsam.html">Knowledge Sync</a> · <a href="agent-tasks/kapsam.html">Agent Tasks</a> · <a href="deployment-api/kapsam.html">Deployment API</a></div></div><div class="flow-card stg" data-s="2" data-e="9" style="border-left:3px solid #5DCAA5"><h3>2 · API sözleşmesi<span class="time">~15 dk</span></h3><ul><li>Endpoint'ler → bir tam request/response → durumlar → hatalar.</li><li>Idempotency ve yetkiyi burada <b>söyle</b>; nasıl çalıştığını 4. adımda açarsın.</li></ul><div class="small"><b>Gösterdiğin:</b> İstemcinin servisi nasıl kullanacağını.</div><div class="say">Every POST takes an Idempotency-Key, and the tenant comes from the token. I'll come back to how that works.</div><div class="small">Bu adım: <a href="knowledge-sync/api.html">Knowledge Sync</a> · <a href="agent-tasks/api.html">Agent Tasks</a> · <a href="deployment-api/api.html">Deployment API</a></div></div><div class="flow-card stg" data-s="3" data-e="9" style="border-left:3px solid #F0997B"><h3>3 · Minimum çözüm<span class="time">~10 dk</span></h3><ul><li>Minimum tablolar ve iş durumları, sonra akış.</li><li>Her kutu için tek cümle: hangi problemi çözüyor? Çiz ve dur.</li></ul><div class="small"><b>Gösterdiğin:</b> İsteğin baştan sona nasıl tamamlandığını.</div><div class="say">This is the simplest version that works. Where would you like me to go deeper?</div><div class="small">Bu adım: <a href="knowledge-sync/cozum.html">Knowledge Sync</a> · <a href="agent-tasks/cozum.html">Agent Tasks</a> · <a href="deployment-api/cozum.html">Deployment API</a></div></div><div class="flow-card stg" data-s="4" data-e="9" style="border-left:3px solid #EF9F27"><h3>4 · Hata ve güvenlik<span class="time">mülakatçı yönlendirir</span></h3><ul><li>Retry, eşzamanlı istek, çökme, yetki, silme ya da iptal.</li><li>Her cevap: <b>karar → gerekçe → bedel veya alternatif</b>.</li></ul><div class="small"><b>Gösterdiğin:</b> Sistemin güvenilir olduğunu.</div><div class="say">I'd do X, because Y. The cost is Z; the alternative would be W.</div><div class="small">Bu adım: <a href="knowledge-sync/hata.html">Knowledge Sync</a> · <a href="agent-tasks/hata.html">Agent Tasks</a> · <a href="deployment-api/hata.html">Deployment API</a></div></div><div class="flow-card stg" data-s="5" data-e="9" style="border-left:3px solid #ED93B1"><h3>5 · Ölçek ve follow-up<span class="time">mülakatçı yönlendirir</span></h3><ul><li>Önce darboğazı adlandır, sonra parçayı ekle.</li><li>Her parça için: hangi problem, neden şimdi, daha basit alternatif, ne zaman geçerdim?</li></ul><div class="small"><b>Gösterdiğin:</b> Kararlarını ihtiyaca bağlayabildiğini.</div><div class="say">The bottleneck here is X, so I'd add Y. The simpler option is Z, and I'd switch when we see W.</div><div class="small">Bu adım: <a href="knowledge-sync/olcek.html">Knowledge Sync</a> · <a href="agent-tasks/olcek.html">Agent Tasks</a> · <a href="deployment-api/olcek.html">Deployment API</a></div></div></div>
+  <div class="stage-text"><div class="t"></div><div class="d"></div></div>
+  <div class="btns"><button class="btn" type="button" data-act="prev">← Önceki</button><button class="btn" type="button" data-act="next">Sonraki →</button><button class="btn" type="button" data-act="all">Hepsi</button></div>
+</div>
+<h2 id="karsilastirma">Üç sistem yan yana</h2>
+<div class="table-wrap"><table>
+<tr><th></th><th>Knowledge Sync</th><th>Agent Tasks</th><th>Deployment API</th></tr>
+<tr><td>Uzun iş</td><td>sync job</td><td>task</td><td>deployment</td></tr>
+<tr><td>Tek aktif iş</td><td>kaynak başına</td><td>konuşma başına</td><td>servis + ortam başına</td></tr>
+<tr><td>İşi worker'a nasıl veririz?</td><td>pending_events → Kafka</td><td>pending_events → Kafka</td><td>Postgres'in kendisi (<code>SKIP LOCKED</code>)</td></tr>
+<tr><td>İlerleme</td><td>polling</td><td>SSE canlı akış + polling</td><td>polling (+ Slack, webhook)</td></tr>
+<tr><td>Redis</td><td>grup cache'i, kota (follow-up)</td><td>olay akışı, token bütçesi</td><td>yok</td></tr>
+<tr><td>Dış yan etki</td><td>yok (sadece okur)</td><td>tool'lar (Jira, e-posta)</td><td>config reposuna commit (Argo CD uygular)</td></tr>
+</table></div>
+<p class="small muted">Aynı soruya (ör. "neden Kafka?") üç sistemde farklı cevap vermek iyi bir şey: her kararı ihtiyaca bağladığını gösterir.</p>
+<h2 id="genel">Genel</h2>
+<div class="grid">
+  <a class="card" href="plan.html"><div class="num">Mülakattan önceki gün</div><h3>Bugünün planı</h3><p>Saat saat çalışma planı, işaretlenebilir adımlarla.</p></a>
+  <a class="card" href="anlatim.html"><div class="num">Anlatım</div><h3>Nasıl anlatırım?</h3><p>4 adımlı kalıp, 60 dakikalık plan, hazır cümleler, takıldığında ne dersin.</p></a>
+  <a class="card" href="sorular.html"><div class="num">Sisteme bağlı olmayan</div><h3>Genel takip soruları</h3><p>Versiyonlama, sayfalama, migration, failover, deploy… Türkçe ana fikir, kısa İngilizce cevap.</p></a>
+  <a class="card" href="ortak.html"><div class="num">Üç sistemde de geçerli</div><h3>Ortak konular</h3><p>Event publisher nerede çalışır, cursor ve offset, multi-tenancy katmanları.</p></a>
+</div>
+<h2 id="paket">Baskı paketi (ilk hali)</h2><p class="small muted">Siteden önce hazırlanan sürüm; bazı isimler eski (Pub/Sub, sync_runs).</p>
+  <p>İlk hazırlanan A4 baskı paketleri. Tarayıcıda okunabilir, PDF olarak yazdırılabilir. A4, gerçek boyut, çift taraflı yazdır.</p>
+  <div class="grid">
+    <div class="card">
+      <div class="num">AI Company · API Development &amp; Solutions Design</div>
+      <h3>Mimari ve API paketi</h3>
+      <p>Oyun planı, API ve altyapı kopya kağıtları, iki senaryo (Knowledge Sync, Agent Tasks), tuzaklar, test edilmiş Go endpoint'i, mini drill'ler, auth platformu vaka çalışması, kağıt mock.</p>
+      <p style="margin-top:10px"><a href="paket/ai-company.html">Tarayıcıda aç</a> · <a href="pdf/ai-company.pdf">PDF</a></p>
+    </div>
+    <div class="card">
+      <div class="num">Delivery Company · Code Craft (Go)</div>
+      <h3>Kodlama turu paketi</h3>
+      <p>45 dakikalık akış, Go iskeleti ve hafıza kartları, tekrar eden kalıplar, ısınma, aggregator, kağıt drill'leri ve cevap anahtarları, perakende sözlüğü.</p>
+      <p style="margin-top:10px"><a href="paket/delivery-company.html">Tarayıcıda aç</a> · <a href="pdf/delivery-company.pdf">PDF</a></p>
+    </div>
+  </div>
+
+  
+</main>
+<footer>Kişisel çalışma notları. Senaryolar alıştırma amaçlıdır; şirket adları anonimleştirilmiştir.</footer>
+<script>initStepper("flowS", [{"n": "1 · Kapsam", "c": "#AFA9EC", "d": "Kısa tut. Amaç tasarımı değiştirecek bilgileri almak."}, {"n": "2 · API", "c": "#5DCAA5", "d": "Turun adı \"API Development\": en çok zamanı buraya ver."}, {"n": "3 · Minimum çözüm", "c": "#F0997B", "d": "En basit çalışan hali çiz ve dur; nereye derinleşmek istediğini sor."}, {"n": "4 · Hata ve güvenlik", "c": "#EF9F27", "d": "Buradan sonra sırayı mülakatçı belirler."}, {"n": "5 · Ölçek", "c": "#ED93B1", "d": "Parça eklemeden önce darboğazı söyle."}]);</script>
+</body>
+</html>

@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deployment API · API</title>
+<link rel="stylesheet" href="../assets/site.css?v=11">
+<script src="../assets/diagrams.js?v=11"></script>
+</head>
+<body>
+<header class="topbar"><div class="topbar-inner">
+  <a class="brand" href="../index.html">Mülakat Hazırlığı</a>
+  <nav>
+    <a href="../index.html">Ana sayfa</a>
+    <a href="../knowledge-sync/kapsam.html">Knowledge Sync</a>
+    <a href="../agent-tasks/kapsam.html">Agent Tasks</a>
+    <a class="active" href="kapsam.html">Deployment API</a>
+  </nav>
+</div>
+<div class="subnav"><nav>
+    <a href="kapsam.html">1 · Kapsam</a>
+    <a class="active" href="api.html">2 · API</a>
+    <a href="cozum.html">3 · Minimum çözüm</a>
+    <a href="hata.html">4 · Hata ve güvenlik</a>
+    <a href="olcek.html">5 · Ölçek ve follow-up</a>
+    <a href="sozluk.html">Sözlük</a>
+    <a href="mock.html">Mock</a>
+</nav></div></header>
+
+<main class="wide">
+<h1>Deployment API · 2. API sözleşmesi</h1>
+<div class="step-hint"><b>Playbook 2/5 · API sözleşmesi.</b> Ne yaparsın: endpoint'ler → bir tam request/response → durumlar → hatalar. Idempotency ve yetkiyi burada söyle. Gösterdiğin: istemcinin servisi nasıl kullanacağını.</div>
+<p class="small muted">Önce kağıda kendin yaz, sonra butonla karşılaştır.</p>
+<p class="small muted">Endpoint'e ya da hata koduna tıkla: altında istek ve cevap açılır. ↗ işaretli hücreye tıkla: ilgili karar açılır.</p>
+<div class="diagram" id="apiDA" data-all="Endpoint&#x27;ler → tek tam istek → durumlar → hatalar → kararlar.">
+  <div class="pills"></div>
+  <div class="api-sheet"><div class="stg" data-s="1" data-e="9"><p class="small" style="margin:0"><b>Kaynaklar:</b> service (sahibi bir takım) · deployment (uzun süren iş) · environment (staging, prod)</p></div><div class="table-wrap"><table><tr class="stg" data-s="1" data-e="9"><th>Endpoint</th><th>Cevap</th><th>Ne yapar?</th></tr><tr class="stg" data-s="1" data-e="9"><td class="ex-toggle"><code>POST /v1/services/{service}/deployments</code></td><td>202 + Location</td><td data-href="hata.html#d1">Yeni deploy.</td></tr><tr class="ex-row stg" data-s="1" data-e="9" hidden><td colspan="3"><div class="ex-label">İstek</div><pre>POST /v1/services/checkout/deployments
+Authorization: Bearer &lt;CI OIDC token&gt;
+Idempotency-Key: 7c9e…
+{ "environment": "prod",
+  "image": "europe-docker.pkg.dev/acme/checkout@sha256:9f2…",
+  "strategy": { "type": "canary", "steps": [10, 50, 100] } }</pre><div class="ex-label">Cevap</div><pre>202 Accepted
+Location: /v1/deployments/dep_481
+{ "id": "dep_481", "status": "pending" }</pre><p class="small" style="margin:4px 0 0">Ayrıntısı 2. adımda: satır satır açıklama.</p></td></tr><tr class="stg" data-s="1" data-e="9"><td class="ex-toggle"><code>GET /v1/deployments/{id}</code></td><td>200</td><td data-href="hata.html#d5">Durum ve adım. CI bunu polling yapar.</td></tr><tr class="ex-row stg" data-s="1" data-e="9" hidden><td colspan="3"><div class="ex-label">İstek</div><pre>GET /v1/deployments/dep_481
+Authorization: Bearer &lt;token&gt;</pre><div class="ex-label">Cevap</div><pre>200 OK
+{ "id": "dep_481", "status": "progressing",
+  "step": { "current": 2, "total": 3, "traffic_percent": 50 },
+  "image": "…@sha256:9f2…", "commit_sha": "a1b2c3d",
+  "created_by": "ci:acme/checkout" }</pre><p class="small" style="margin:4px 0 0">Worker bu bilgiyi Argo CD'den (sync, health, canary adımı) okuyup yazar.</p></td></tr><tr class="stg" data-s="1" data-e="9"><td class="ex-toggle"><code>GET /v1/services/{service}/deployments?environment=prod&amp;cursor=…</code></td><td>200</td><td data-href="../ortak.html#cursor">Geçmiş, yeniden eskiye.</td></tr><tr class="ex-row stg" data-s="1" data-e="9" hidden><td colspan="3"><div class="ex-label">İstek</div><pre>GET /v1/services/checkout/deployments?environment=prod&amp;limit=20
+Authorization: Bearer &lt;token&gt;</pre><div class="ex-label">Cevap</div><pre>200 OK
+{ "data": [
+    { "id": "dep_481", "image": "…@sha256:9f2…", "status": "succeeded",
+      "created_by": "ci:acme/checkout", "finished_at": "2026-11-10T09:31:00Z" },
+    { "id": "dep_470", "image": "…@sha256:1a7…", "status": "succeeded" } ],
+  "next_cursor": "eyJpZCI6ImRlcF80NzAifQ", "has_more": true }</pre></td></tr><tr class="stg" data-s="1" data-e="9"><td class="ex-toggle"><code>POST /v1/deployments/{id}:approve</code></td><td>200 / 409</td><td data-href="hata.html#d4">Prod onayı.</td></tr><tr class="ex-row stg" data-s="1" data-e="9" hidden><td colspan="3"><div class="ex-label">İstek</div><pre>POST /v1/deployments/dep_481:approve
+Authorization: Bearer &lt;onaylayanın SSO token'ı&gt;</pre><div class="ex-label">Cevap</div><pre>200 OK
+{ "id": "dep_481", "status": "progressing", "approved_by": "user:ayse" }</pre><p class="small" style="margin:4px 0 0">Body yok: onaylayan token'dan okunur. Kendi deploy'unu onaylarsan 403; onay beklemiyorsa 409.</p></td></tr><tr class="stg" data-s="1" data-e="9"><td class="ex-toggle"><code>POST /v1/deployments/{id}:rollback</code></td><td>202</td><td data-href="hata.html#d6">Önceki sağlıklı image'a dönüş.</td></tr><tr class="ex-row stg" data-s="1" data-e="9" hidden><td colspan="3"><div class="ex-label">İstek</div><pre>POST /v1/deployments/dep_481:rollback
+Authorization: Bearer &lt;token&gt;
+Idempotency-Key: 2d4f…
+{ "reason": "error rate up after release" }</pre><div class="ex-label">Cevap</div><pre>202 Accepted
+Location: /v1/deployments/dep_482
+{ "id": "dep_482", "rollback_of": "dep_481",
+  "image": "…@sha256:1a7…", "status": "pending" }</pre><p class="small" style="margin:4px 0 0">Rollback yeni bir deployment: worker önceki digest'i config reposuna commit'ler; geçmiş tek çizgide kalır.</p></td></tr><tr class="stg" data-s="1" data-e="9"><td class="ex-toggle"><code>POST /v1/deployments/{id}:cancel</code></td><td>202 / 200</td><td data-href="hata.html#d6">Durdur; zaten bitmişse mevcut durum.</td></tr><tr class="ex-row stg" data-s="1" data-e="9" hidden><td colspan="3"><div class="ex-label">İstek</div><pre>POST /v1/deployments/dep_481:cancel
+Authorization: Bearer &lt;token&gt;</pre><div class="ex-label">Cevap</div><pre>202 Accepted
+{ "id": "dep_481", "status": "progressing", "cancel_requested": true }</pre><div class="ex-label">Deploy zaten bitmişse</div><pre>200 OK
+{ "id": "dep_481", "status": "succeeded" }</pre></td></tr></table></div><div class="stg" data-s="2" data-e="9"><p style="margin:0"><b>Akış:</b> CI gönderir → API sahipliği ve aktif deploy'u kontrol edip kaydeder → 202 döner → CI <code>Location</code>'ı sorar. Aşağıda aynı istek satır satır.</p></div><div class="table-wrap"><table><tr class="stg" data-s="2" data-e="9"><th style="width:45%">İstek</th><th>Ne demek, neden?</th></tr><tr class="stg" data-s="2" data-e="9"><td><code>POST /v1/services/checkout/deployments</code></td><td><code>checkout</code> servisi için <b>yeni bir deploy</b> başlat. Deploy servisin altında yaşar; tek aktif deploy kuralı servis + ortam başına.</td></tr><tr class="stg" data-s="2" data-e="9"><td><code>Authorization: Bearer &lt;CI OIDC token&gt;</code></td><td><b>Kim olduğun:</b> CI'ın kendi kısa ömürlü kimliği (hangi repo). Uzun ömürlü bir secret yok. API bu repoyu bir takıma eşler ve servisin sahibi mi diye bakar. <a href="../ortak.html#token">Token'dan nasıl? →</a></td></tr><tr class="stg" data-s="2" data-e="9"><td><code>Idempotency-Key: 7c9e…</code></td><td>CI job'u yeniden denenirse aynı anahtarla gelir; ikinci deploy başlamaz, aynı deployment döner. Pratikte pipeline run id.</td></tr><tr class="stg" data-s="2" data-e="9"><td><code>"environment": "prod"</code></td><td>Nereye: staging ya da prod. Prod'da onay ve daha sıkı kurallar.</td></tr><tr class="stg" data-s="2" data-e="9"><td><code>"image": "…@sha256:9f2…"</code></td><td>Ne: image'ın <b>digest</b>'i, tag değil. Digest değişmez; tam olarak neyin çalıştığını bilirsin.</td></tr><tr class="stg" data-s="2" data-e="9"><td><code>"strategy": { "type": "canary", "steps": [10, 50, 100] }</code></td><td>Nasıl: önce trafiğin %10'u, sağlıklıysa %50, sonra %100. Bunu Argo Rollouts uygular; API sadece adımları seçtirir.</td></tr></table></div><div class="table-wrap"><table><tr class="stg" data-s="2" data-e="9"><th style="width:45%">Cevap</th><th>Ne demek, neden?</th></tr><tr class="stg" data-s="2" data-e="9"><td><code>202 Accepted</code></td><td>"Aldım ve <b>kaydettim</b>; rollout arka planda." Rollout dakikalar sürer.</td></tr><tr class="stg" data-s="2" data-e="9"><td><code>Location: /v1/deployments/dep_481</code></td><td>Durumu nereden soracağın. CI bu adrese backoff'lu <code>GET</code> atar.</td></tr><tr class="stg" data-s="2" data-e="9"><td><code>{ "id": "dep_481", "status": "pending" }</code></td><td>Deploy'un kimliği ve ilk durumu.</td></tr></table></div><div class="stg" data-s="3" data-e="9" data-href="hata.html#d5"><pre>pending → progressing → (awaiting_approval) → succeeded
+                      ↘ failed | rolled_back | cancelled
+
+GET /v1/deployments/dep_481 → 200
+{ "id": "dep_481", "status": "progressing",
+  "step": { "current": 2, "total": 3, "traffic_percent": 50 } }
+
+{ "id": "dep_481", "status": "rolled_back",
+  "reason": { "code": "ERROR_RATE_HIGH",
+              "message": "5xx 4.1% vs 0.3% on old pods" } }</pre></div><div class="stg" data-s="4" data-e="9"><p class="small" style="margin:0"><b>Tek hata formatı:</b> sabit <code>code</code>, insan için <code>message</code>, <code>request_id</code>, gerekirse <code>details</code>.</p></div><div class="table-wrap"><table><tr class="stg" data-s="4" data-e="9"><th>Kod</th><th>Ne zaman?</th></tr><tr class="stg" data-s="4" data-e="9"><td class="ex-toggle">400 <code>VALIDATION_FAILED</code></td><td data-href="sozluk.html#digest">Image digest değil tag (<code>:latest</code>), bilinmeyen strateji.</td></tr><tr class="ex-row stg" data-s="4" data-e="9" hidden><td colspan="2"><pre>400 Bad Request
+{ "error": { "code": "VALIDATION_FAILED",
+             "message": "image must be referenced by digest, not tag",
+             "request_id": "req_5k2…",
+             "details": { "field": "image" } } }</pre></td></tr><tr class="stg" data-s="4" data-e="9"><td class="ex-toggle">401 <code>UNAUTHENTICATED</code></td><td>Token yok ya da süresi dolmuş.</td></tr><tr class="ex-row stg" data-s="4" data-e="9" hidden><td colspan="2"><pre>401 Unauthorized
+{ "error": { "code": "UNAUTHENTICATED",
+             "message": "Token expired",
+             "request_id": "req_5k2…" } }</pre></td></tr><tr class="stg" data-s="4" data-e="9"><td class="ex-toggle">403 <code>FORBIDDEN</code></td><td data-href="hata.html#d4">Takım servisin sahibi değil; ya da kendi deploy'unu onaylıyor.</td></tr><tr class="ex-row stg" data-s="4" data-e="9" hidden><td colspan="2"><pre>403 Forbidden
+{ "error": { "code": "FORBIDDEN",
+             "message": "Team growth does not own service checkout",
+             "request_id": "req_5k2…" } }</pre></td></tr><tr class="stg" data-s="4" data-e="9"><td class="ex-toggle">404 <code>NOT_FOUND</code></td><td>Servis ya da deployment yok.</td></tr><tr class="ex-row stg" data-s="4" data-e="9" hidden><td colspan="2"><pre>404 Not Found
+{ "error": { "code": "NOT_FOUND",
+             "message": "Service checkout not found",
+             "request_id": "req_5k2…" } }</pre></td></tr><tr class="stg" data-s="4" data-e="9"><td class="ex-toggle">409 <code>DEPLOYMENT_IN_PROGRESS</code></td><td data-href="hata.html#d3">Aynı servis + ortamda aktif deploy var.</td></tr><tr class="ex-row stg" data-s="4" data-e="9" hidden><td colspan="2"><pre>409 Conflict
+{ "error": { "code": "DEPLOYMENT_IN_PROGRESS",
+             "message": "checkout already has an active deployment in prod",
+             "request_id": "req_5k2…",
+             "details": { "deployment_id": "dep_470" } } }</pre></td></tr><tr class="stg" data-s="4" data-e="9"><td class="ex-toggle">409 <code>NOT_AWAITING_APPROVAL</code></td><td data-href="hata.html#d4">Onay geldi ama deploy onay beklemiyor.</td></tr><tr class="ex-row stg" data-s="4" data-e="9" hidden><td colspan="2"><pre>409 Conflict
+{ "error": { "code": "NOT_AWAITING_APPROVAL",
+             "message": "dep_481 is progressing, not waiting for approval",
+             "request_id": "req_5k2…" } }</pre></td></tr><tr class="stg" data-s="4" data-e="9"><td class="ex-toggle">422 <code>IMAGE_NOT_SIGNED</code></td><td data-href="hata.html#d4">Image imzasız ya da registry'de yok.</td></tr><tr class="ex-row stg" data-s="4" data-e="9" hidden><td colspan="2"><pre>422 Unprocessable Entity
+{ "error": { "code": "IMAGE_NOT_SIGNED",
+             "message": "No valid signature for this image digest",
+             "request_id": "req_5k2…" } }</pre></td></tr><tr class="stg" data-s="4" data-e="9"><td class="ex-toggle">429 <code>RATE_LIMITED</code></td><td>İstek limiti aşıldı.</td></tr><tr class="ex-row stg" data-s="4" data-e="9" hidden><td colspan="2"><pre>429 Too Many Requests
+Retry-After: 30
+{ "error": { "code": "RATE_LIMITED",
+             "message": "Too many requests, retry after 30 seconds",
+             "request_id": "req_5k2…" } }</pre></td></tr></table></div><div class="table-wrap"><table><tr class="stg" data-s="5" data-e="9"><th>Kural / karar</th><th>Neden?</th></tr><tr class="stg" data-s="5" data-e="9" data-href="sozluk.html#digest"><td>Image <b>digest</b>, tag değil</td><td>Tag değişebilir, digest değişmez; rollback tam olarak eski sürüme döner.</td></tr><tr class="stg" data-s="5" data-e="9" data-href="hata.html#d3"><td>Servis + ortam başına <b>tek aktif deploy</b></td><td>İki rollout aynı anda birbirini ezer; partial unique index garanti eder.</td></tr><tr class="stg" data-s="5" data-e="9" data-href="hata.html#d2"><td>Tekrar: aynı <code>Idempotency-Key</code> → aynı deploy</td><td>CI job'ları yeniden denenir.</td></tr><tr class="stg" data-s="5" data-e="9" data-href="hata.html#d6"><td>Rollback <b>yeni bir deployment</b></td><td>Geçmiş tek bir çizgi kalır: ne zaman, hangi digest, kim.</td></tr><tr class="stg" data-s="5" data-e="9" data-href="cozum.html#neden-api"><td>Yürütme <b>GitOps</b>'ta</td><td>API Kubernetes'e dokunmaz; config reposuna commit atar, Argo CD uygular, Argo Rollouts canary'yi yapar.</td></tr><tr class="stg" data-s="5" data-e="9" data-href="olcek.html#followup"><td>REST, gRPC değil</td><td>CI ve CLI'dan kolay çağrılır, gateway'den geçer, insan okuyabilir; yüksek hacimli servisler arası trafik yok.</td></tr></table></div></div>
+  <div class="stage-text"><div class="t"></div><div class="d"></div></div>
+  <div class="btns"><button class="btn" type="button" data-act="prev">← Önceki</button><button class="btn" type="button" data-act="next">Sonraki →</button><button class="btn" type="button" data-act="all">Hepsi</button></div>
+</div>
+<div class="say">I deploy by image digest, not tag, so we always know exactly what runs and a rollback goes back to the exact previous version.</div>
+<nav class="pager"><a href="kapsam.html">← 1 · Kapsam</a><a href="cozum.html">3 · Minimum çözüm →</a></nav>
+</main>
+<footer>Kişisel çalışma notları. Senaryolar alıştırma amaçlıdır; şirket adları anonimleştirilmiştir.</footer>
+<script>initStepper("apiDA", [{"n": "1 · Endpoint'ler", "c": "#AFA9EC", "d": "Önce isimler: deploy başlat, durum, geçmiş, onay, rollback, iptal."}, {"n": "2 · Tek tam istek", "c": "#5DCAA5", "d": "Bir endpoint'i baştan sona yaz ve her satırın neden orada olduğunu söyleyebil: kimlik, idempotency, ortam, digest, strateji."}, {"n": "3 · Durum ve ilerleme", "c": "#F0997B", "d": "Durum makinesi ve GET cevabı: hangi adımda, trafiğin yüzde kaçı; rollback'te nedeni."}, {"n": "4 · Hatalar", "c": "#EF9F27", "d": "Tek hata formatı; en önemlisi 409 ve cevapta çalışan deploy'un id'si."}, {"n": "5 · Kurallar", "c": "#ED93B1", "d": "Bu soruda puan getiren kararlar, tek cümleyle."}]);</script>
+</body>
+</html>

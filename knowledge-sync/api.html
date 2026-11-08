@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Knowledge Sync · API</title>
+<link rel="stylesheet" href="../assets/site.css?v=11">
+<script src="../assets/diagrams.js?v=11"></script>
+</head>
+<body>
+<header class="topbar"><div class="topbar-inner">
+  <a class="brand" href="../index.html">Mülakat Hazırlığı</a>
+  <nav>
+    <a href="../index.html">Ana sayfa</a>
+    <a class="active" href="kapsam.html">Knowledge Sync</a>
+    <a href="../agent-tasks/kapsam.html">Agent Tasks</a>
+    <a href="../deployment-api/kapsam.html">Deployment API</a>
+  </nav>
+</div>
+<div class="subnav"><nav>
+    <a href="kapsam.html">1 · Kapsam</a>
+    <a class="active" href="api.html">2 · API</a>
+    <a href="cozum.html">3 · Minimum çözüm</a>
+    <a href="hata.html">4 · Hata ve güvenlik</a>
+    <a href="olcek.html">5 · Ölçek ve follow-up</a>
+    <a href="sozluk.html">Sözlük</a>
+    <a href="mock.html">Mock</a>
+</nav></div></header>
+
+<main class="wide">
+<h1>Knowledge Sync · 2. API sözleşmesi</h1>
+<div class="step-hint"><b>Playbook 2/5 · API sözleşmesi.</b> Ne yaparsın: endpoint'ler → bir tam request/response → durumlar → hatalar. Idempotency ve yetkiyi burada söyle. Gösterdiğin: istemcinin servisi nasıl kullanacağını.</div>
+<p class="small muted">Önce kağıda kendin yaz, sonra butonla karşılaştır.</p>
+<p class="small muted">Endpoint'e ya da hata koduna tıkla: altında istek ve cevap açılır. ↗ işaretli hücreye tıkla: ilgili karar açılır.</p>
+<div class="diagram" id="apiKS" data-all="Endpoint&#x27;ler → tek tam istek → durumlar → hatalar → kurallar. Bu sırayla yazarsan API kısmı 15 dakikada biter.">
+  <div class="pills"></div>
+  <div class="api-sheet"><div class="stg" data-s="1" data-e="9"><p class="small" style="margin:0"><b>Kaynaklar:</b> source (bağlı kaynak) · sync job (uzun süren iş) · document · search (aksiyon)</p></div><div class="table-wrap"><table><tr class="stg" data-s="1" data-e="9"><th>Endpoint</th><th>Cevap</th><th>Ne yapar?</th></tr><tr class="stg" data-s="1" data-e="9"><td class="ex-toggle"><code>POST /v1/sources</code></td><td>201 + Location</td><td data-href="hata.html#k2">Kaynak bağla (OAuth code ile).</td></tr><tr class="ex-row stg" data-s="1" data-e="9" hidden><td colspan="3"><div class="ex-label">İstek</div><pre>POST /v1/sources
+Authorization: Bearer &lt;JWT&gt;
+Idempotency-Key: 9b2e…
+{ "type": "google_drive",
+  "oauth_code": "4/0Ab…",
+  "scope": { "folders": ["root"] } }</pre><div class="ex-label">Cevap</div><pre>201 Created
+Location: /v1/sources/src_8f2
+{ "id": "src_8f2", "type": "google_drive",
+  "status": "active", "created_at": "2026-11-10T08:55:00Z" }</pre><p class="small" style="margin:4px 0 0">OAuth token'ı cevapta asla dönmez; şifreli saklanır. OAuth code tek kullanımlık olduğu için Idempotency-Key burada kritik.</p></td></tr><tr class="stg" data-s="1" data-e="9"><td class="ex-toggle"><code>GET /v1/sources?cursor=…</code></td><td>200</td><td data-href="../ortak.html#cursor">Listele, cursor sayfalama.</td></tr><tr class="ex-row stg" data-s="1" data-e="9" hidden><td colspan="3"><div class="ex-label">İstek</div><pre>GET /v1/sources?limit=50
+Authorization: Bearer &lt;JWT&gt;</pre><div class="ex-label">Cevap</div><pre>200 OK
+{ "data": [
+    { "id": "src_8f2", "type": "google_drive", "status": "active",
+      "last_sync": { "id": "sync_123", "status": "succeeded" } }
+  ],
+  "next_cursor": "eyJpZCI6InNyY184ZjIifQ",
+  "has_more": true }</pre><p class="small" style="margin:4px 0 0">Sonraki sayfa: <code>?cursor=eyJpZCI6…</code>. Cursor opak; istemci içine bakmaz.</p></td></tr><tr class="stg" data-s="1" data-e="9"><td class="ex-toggle"><code>DELETE /v1/sources/{id}</code></td><td>202</td><td data-href="hata.html#k6">Bağlantıyı kaldır; temizlik arka planda.</td></tr><tr class="ex-row stg" data-s="1" data-e="9" hidden><td colspan="3"><div class="ex-label">İstek</div><pre>DELETE /v1/sources/src_8f2
+Authorization: Bearer &lt;JWT&gt;</pre><div class="ex-label">Cevap</div><pre>202 Accepted
+{ "id": "src_8f2", "status": "deleting" }</pre><p class="small" style="margin:4px 0 0">Silme bitince <code>GET /v1/sources/src_8f2</code> → 404.</p></td></tr><tr class="stg" data-s="1" data-e="9"><td class="ex-toggle"><code>POST /v1/sources/{id}/syncs</code></td><td>202 + Location</td><td data-href="hata.html#k1">Sync başlat.</td></tr><tr class="ex-row stg" data-s="1" data-e="9" hidden><td colspan="3"><div class="ex-label">İstek</div><pre>POST /v1/sources/src_8f2/syncs
+Authorization: Bearer &lt;JWT&gt;
+Idempotency-Key: 4f1c…
+{ "mode": "incremental" }</pre><div class="ex-label">Cevap</div><pre>202 Accepted
+Location: /v1/syncs/sync_123
+{ "id": "sync_123", "status": "queued" }</pre><div class="ex-label">Zaten çalışan bir sync varsa</div><pre>200 OK
+{ "id": "sync_120", "status": "running" }</pre><p class="small" style="margin:4px 0 0">Ayrıntısı 2. adımda: satır satır açıklama.</p></td></tr><tr class="stg" data-s="1" data-e="9"><td class="ex-toggle"><code>GET /v1/syncs/{id}</code></td><td>200</td><td data-href="hata.html#k5">Durum ve ilerleme.</td></tr><tr class="ex-row stg" data-s="1" data-e="9" hidden><td colspan="3"><div class="ex-label">İstek</div><pre>GET /v1/syncs/sync_123
+Authorization: Bearer &lt;JWT&gt;</pre><div class="ex-label">Cevap</div><pre>200 OK
+{ "id": "sync_123", "status": "running",
+  "progress": { "processed": 1200, "failed": 3 },
+  "started_at": "2026-11-10T09:00:02Z" }</pre></td></tr><tr class="stg" data-s="1" data-e="9"><td class="ex-toggle"><code>POST /v1/search</code></td><td>200</td><td data-href="hata.html#acl-first">Kullanıcının izinleriyle arama.</td></tr><tr class="ex-row stg" data-s="1" data-e="9" hidden><td colspan="3"><div class="ex-label">İstek</div><pre>POST /v1/search
+Authorization: Bearer &lt;JWT&gt;
+{ "query": "babalık izni kaç gün",
+  "top_k": 10,
+  "filters": { "source_ids": ["src_8f2"] } }</pre><div class="ex-label">Cevap</div><pre>200 OK
+{ "results": [
+    { "document_id": "doc_77",
+      "title": "İzin politikası 2026",
+      "url": "https://drive.google.com/…",
+      "snippet": "…babalık izni 10 iş günü…",
+      "source_id": "src_8f2" } ] }</pre><p class="small" style="margin:4px 0 0">Kullanıcı ve grupları token'dan gelir; sadece görebildiği dokümanlar döner.</p></td></tr></table></div><div class="stg" data-s="2" data-e="9"><p style="margin:0"><b>Akış:</b> istemci gönderir → API kaydeder (tek transaction) → 202 döner → istemci <code>Location</code>'daki adresi sorar. Aşağıda aynı istek satır satır.</p></div><div class="table-wrap"><table><tr class="stg" data-s="2" data-e="9"><th style="width:45%">İstek</th><th>Ne demek, neden?</th></tr><tr class="stg" data-s="2" data-e="9"><td><code>POST /v1/sources/src_8f2/syncs</code></td><td><code>src_8f2</code> kaynağı için <b>yeni bir sync</b> oluştur. Sync, kaynağın altında yaşayan bir alt kaynak; o yüzden yol <code>/sources/{id}/syncs</code>.</td></tr><tr class="stg" data-s="2" data-e="9"><td><code>Authorization: Bearer &lt;JWT&gt;</code></td><td><b>Kim olduğun.</b> Token'da tenant ve kullanıcı var. Tenant'ı body'den asla almayız; böylece kimse başka müşteri adına iş başlatamaz. <a href="../ortak.html#token">Token'dan nasıl? →</a></td></tr><tr class="stg" data-s="2" data-e="9"><td><code>Idempotency-Key: 4f1c…</code></td><td>İstemcinin ürettiği <b>tek seferlik anahtar</b>. Ağ koparsa aynı anahtarla tekrar gönderir; ikinci bir sync açılmaz, ilk cevap döner.</td></tr><tr class="stg" data-s="2" data-e="9"><td><code>{ "mode": "incremental" }</code></td><td>Ne yapılacağı: sadece değişenleri çek. <code>full</code> her şeyi baştan tarar.</td></tr></table></div><div class="table-wrap"><table><tr class="stg" data-s="2" data-e="9"><th style="width:45%">Cevap</th><th>Ne demek, neden?</th></tr><tr class="stg" data-s="2" data-e="9"><td><code>202 Accepted</code></td><td>"Aldım ve <b>kaydettim</b>, ama iş henüz bitmedi." 200 değil, çünkü sync daha yapılmadı. Bu kod dönmeden önce iş veritabanına yazılmış olmalı.</td></tr><tr class="stg" data-s="2" data-e="9"><td><code>Location: /v1/syncs/sync_123</code></td><td>Durumu <b>nereden soracağın</b>. İstemci bu adrese <code>GET</code> atar.</td></tr><tr class="stg" data-s="2" data-e="9"><td><code>{ "id": "sync_123", "status": "queued" }</code></td><td>İşin kimliği ve ilk durumu: sırada bekliyor.</td></tr></table></div><div class="stg" data-s="3" data-e="9" data-href="hata.html#k5"><pre>queued → running → succeeded | failed | cancelled
+
+GET /v1/syncs/sync_123 → 200
+{ "id": "sync_123", "status": "running",
+  "progress": { "processed": 1200, "failed": 3 } }
+
+{ "id": "sync_123", "status": "failed",
+  "error": { "code": "SOURCE_AUTH_EXPIRED",
+             "message": "Reconnect Google Drive" } }</pre></div><div class="stg" data-s="4" data-e="9"><p class="small" style="margin:0"><b>Tek hata formatı:</b> her hata aynı şekilde döner: makine için sabit <code>code</code>, insan için <code>message</code>, loglarla eşleşen <code>request_id</code>, gerekirse <code>details</code>.</p></div><div class="table-wrap"><table><tr class="stg" data-s="4" data-e="9"><th>Kod</th><th>Ne zaman?</th></tr><tr class="stg" data-s="4" data-e="9"><td class="ex-toggle">400 <code>VALIDATION_FAILED</code></td><td>Body hatalı (ör. bilinmeyen <code>mode</code>).</td></tr><tr class="ex-row stg" data-s="4" data-e="9" hidden><td colspan="2"><pre>400 Bad Request
+{ "error": { "code": "VALIDATION_FAILED",
+             "message": "mode must be incremental or full",
+             "request_id": "req_9a1…",
+             "details": { "field": "mode" } } }</pre></td></tr><tr class="stg" data-s="4" data-e="9"><td class="ex-toggle">401 <code>UNAUTHENTICATED</code></td><td>Token yok ya da süresi dolmuş.</td></tr><tr class="ex-row stg" data-s="4" data-e="9" hidden><td colspan="2"><pre>401 Unauthorized
+{ "error": { "code": "UNAUTHENTICATED",
+             "message": "Token expired",
+             "request_id": "req_9a1…" } }</pre></td></tr><tr class="stg" data-s="4" data-e="9"><td class="ex-toggle">403 <code>FORBIDDEN</code></td><td data-href="hata.html#k4">Rol yetmiyor (ör. viewer sync başlatıyor).</td></tr><tr class="ex-row stg" data-s="4" data-e="9" hidden><td colspan="2"><pre>403 Forbidden
+{ "error": { "code": "FORBIDDEN",
+             "message": "Role viewer cannot start a sync",
+             "request_id": "req_9a1…" } }</pre></td></tr><tr class="stg" data-s="4" data-e="9"><td class="ex-toggle">404 <code>NOT_FOUND</code></td><td data-href="../ortak.html#tenant">Kaynak yok <i>ya da</i> başka tenant'ın: varlığını sızdırma.</td></tr><tr class="ex-row stg" data-s="4" data-e="9" hidden><td colspan="2"><pre>404 Not Found
+{ "error": { "code": "NOT_FOUND",
+             "message": "Source not found",
+             "request_id": "req_9a1…" } }</pre></td></tr><tr class="stg" data-s="4" data-e="9"><td class="ex-toggle">409 <code>IDEMPOTENCY_KEY_REUSED</code></td><td data-href="hata.html#k2">Aynı key, farklı body.</td></tr><tr class="ex-row stg" data-s="4" data-e="9" hidden><td colspan="2"><pre>409 Conflict
+{ "error": { "code": "IDEMPOTENCY_KEY_REUSED",
+             "message": "Same key was used with a different body",
+             "request_id": "req_9a1…" } }</pre></td></tr><tr class="stg" data-s="4" data-e="9"><td class="ex-toggle">409 <code>SOURCE_DELETING</code></td><td data-href="hata.html#k6">Silinmekte olan kaynakta yeni sync.</td></tr><tr class="ex-row stg" data-s="4" data-e="9" hidden><td colspan="2"><pre>409 Conflict
+{ "error": { "code": "SOURCE_DELETING",
+             "message": "Source src_8f2 is being deleted",
+             "request_id": "req_9a1…" } }</pre></td></tr><tr class="stg" data-s="4" data-e="9"><td class="ex-toggle">429 <code>RATE_LIMITED</code></td><td>İstek limiti aşıldı.</td></tr><tr class="ex-row stg" data-s="4" data-e="9" hidden><td colspan="2"><pre>429 Too Many Requests
+Retry-After: 30
+{ "error": { "code": "RATE_LIMITED",
+             "message": "Too many requests, retry after 30 seconds",
+             "request_id": "req_9a1…" } }</pre></td></tr><tr class="stg" data-s="4" data-e="9"><td class="ex-toggle">503 <code>UNAVAILABLE</code></td><td data-href="hata.html#k1">Veritabanı yok: işi kaydedemiyorsak kabul de etmeyiz.</td></tr><tr class="ex-row stg" data-s="4" data-e="9" hidden><td colspan="2"><pre>503 Service Unavailable
+Retry-After: 5
+{ "error": { "code": "UNAVAILABLE",
+             "message": "Try again shortly",
+             "request_id": "req_9a1…" } }</pre></td></tr></table></div><div class="table-wrap"><table><tr class="stg" data-s="5" data-e="9"><th>Kural</th><th>Karar</th></tr><tr class="stg" data-s="5" data-e="9" data-href="hata.html#k2"><td>Tekrar</td><td>Aynı <code>Idempotency-Key</code> → aynı sync döner.</td></tr><tr class="stg" data-s="5" data-e="9" data-href="hata.html#k3"><td>Eşzamanlı</td><td>Kaynak başına tek aktif sync; zaten çalışıyorsa mevcut sync 200 ile döner.</td></tr><tr class="stg" data-s="5" data-e="9" data-href="hata.html#k4"><td>Yetki</td><td>Başlatma: tenant admin. Görme: admin + viewer. Başka tenant → 404.</td></tr><tr class="stg" data-s="5" data-e="9" data-href="hata.html#k6"><td>Silme</td><td>DELETE → 202: yeni sync reddedilir, çalışan durur, aramadan hemen çıkar, veri arka planda silinir.</td></tr></table></div></div>
+  <div class="stage-text"><div class="t"></div><div class="d"></div></div>
+  <div class="btns"><button class="btn" type="button" data-act="prev">← Önceki</button><button class="btn" type="button" data-act="next">Sonraki →</button><button class="btn" type="button" data-act="all">Hepsi</button></div>
+</div>
+<div class="say">Every POST takes an Idempotency-Key, and the tenant comes from the token, never from the body. I'll come back to how that works.</div>
+<nav class="pager"><a href="kapsam.html">← 1 · Kapsam</a><a href="cozum.html">3 · Minimum çözüm →</a></nav>
+</main>
+<footer>Kişisel çalışma notları. Senaryolar alıştırma amaçlıdır; şirket adları anonimleştirilmiştir.</footer>
+<script>initStepper("apiKS", [{"n": "1 · Endpoint'ler", "c": "#AFA9EC", "d": "Önce isimler: hangi kaynaklar var, hangi işlemler. Satıra tıklayınca ilgili karar açılır."}, {"n": "2 · Tek tam istek", "c": "#5DCAA5", "d": "Bir endpoint'i baştan sona yaz ve her satırın neden orada olduğunu söyleyebil: yetki, idempotency, body, 202, Location."}, {"n": "3 · Durum ve ilerleme", "c": "#F0997B", "d": "Uzun iş: durum makinesi ve GET cevabı. Hata da bir durum, mesajıyla birlikte."}, {"n": "4 · Hatalar", "c": "#EF9F27", "d": "Tek hata formatı, makine için sabit kod, request_id. Hangi kod ne zaman?"}, {"n": "5 · Kurallar", "c": "#ED93B1", "d": "Tekrar, eşzamanlılık, yetki, silme: en sık gelen dört kural, tek cümleyle."}]);</script>
+</body>
+</html>

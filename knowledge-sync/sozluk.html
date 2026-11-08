@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Knowledge Sync · Sözlük</title>
+<link rel="stylesheet" href="../assets/site.css?v=11">
+</head>
+<body>
+<header class="topbar"><div class="topbar-inner">
+  <a class="brand" href="../index.html">Mülakat Hazırlığı</a>
+  <nav>
+    <a href="../index.html">Ana sayfa</a>
+    <a class="active" href="kapsam.html">Knowledge Sync</a>
+    <a href="../agent-tasks/kapsam.html">Agent Tasks</a>
+    <a href="../deployment-api/kapsam.html">Deployment API</a>
+  </nav>
+</div>
+<div class="subnav"><nav>
+    <a href="kapsam.html">1 · Kapsam</a>
+    <a href="api.html">2 · API</a>
+    <a href="cozum.html">3 · Minimum çözüm</a>
+    <a href="hata.html">4 · Hata ve güvenlik</a>
+    <a href="olcek.html">5 · Ölçek ve follow-up</a>
+    <a class="active" href="sozluk.html">Sözlük</a>
+    <a href="mock.html">Mock</a>
+</nav></div></header>
+
+<main>
+<h1>Knowledge Sync · Sözlük</h1>
+<p class="lead">Sadece bu sistemin diyagramındaki kavramlar, diyagramdaki sıraya göre. Her biri için: ne olduğu, bizdeki görevi, <b>hangi problemi çözdüğü, neden şimdi gerektiği, daha basit alternatifi</b> ve söyleyeceğin İngilizce cümle (🗣).</p>
+<label for="q" class="small muted">Ara (Türkçe ya da İngilizce):</label>
+<input id="q" class="search" type="search" placeholder="ör. kuyruk, idempotent, izin" autocomplete="off">
+<p id="count" class="small muted"></p>
+<nav class="toc"><b>Kavramlar</b><ol><li><a href="#gateway">Gateway</a></li><li><a href="#api">API</a></li><li><a href="#lro">202 Accepted ve uzun süren iş</a></li><li><a href="#idempotency">Idempotency</a></li><li><a href="#postgres">Postgres</a></li><li><a href="#pending-events">pending_events ve event publisher</a></li><li><a href="#kafka">Kafka topic</a></li><li><a href="#sync-worker">Sync worker</a></li><li><a href="#source-apps">Kaynak uygulamalar</a></li><li><a href="#acl">ACL ve ACL worker</a></li><li><a href="#redis">Redis</a></li><li><a href="#webhook">Webhook</a></li><li><a href="#embedding">Embedding</a></li></ol></nav>
+<section class="term" id="gateway" data-k="gateway jwt oidc sso rate limit envoy güvenlik turnike ">
+<h3>Gateway <a class="anchor" href="#gateway">#</a></h3><div class="tags"><span class="tag a">Aşama 1</span></div>
+<dl class="kv"><dt>Ne?</dt><dd>API'lerin önündeki güvenlik görevlisi. Her isteği API'ye ulaşmadan kontrol eder.</dd><dt>Benzetme</dt><dd>Binanın girişindeki turnike ve güvenlik.</dd><dt>Bizde</dt><dd>Admin ve kullanıcı isteklerinde JWT'yi doğrular, rate limit uygular, istek boyutunu sınırlar.</dd><dt>Neden 1. aşamada</dt><dd>Kimlik doğrulama en basit sürümde bile isteğe bağlı değildir. <a href="cozum.html#neden-gateway">Gateway 1. aşamada, webhook 4. aşamada: neden? →</a></dd></dl>
+<div class="decide"><div><b>Hangi problemi çözüyor?</b> Kimlik doğrulama, rate limit ve istek boyutu sınırı tek yerde.</div><div><b>Neden şimdi?</b> 1. aşama: güvenlik sonraya bırakılmaz.</div><div><b>Daha basit alternatif:</b> Her serviste aynı middleware (az servis varken yeter).</div><div><b>Bedeli:</b> Bir ağ adımı daha; yanlış ayar tüm trafiği etkiler.</div></div>
+<div class="say">The gateway handles cross-cutting concerns once: token validation, rate limits, request size. So every service doesn't reimplement them.</div>
+</section>
+<section class="term" id="api" data-k="api stateless hpa garson kapı ">
+<h3>API <span class="muted small">(Knowledge Sources API, Search API)</span> <a class="anchor" href="#api">#</a></h3><div class="tags"><span class="tag a">Aşama 1, 3</span></div>
+<dl class="kv"><dt>Ne?</dt><dd>Dış dünyanın sistemle konuştuğu kapı. HTTP istekleri alır, kontrol eder ve cevap döner.</dd><dt>Benzetme</dt><dd>Restorandaki garson. Siparişi alır, deftere yazar, "tamam, hazırlanıyor" der. Yemeği kendisi pişirmez.</dd><dt>Bizde</dt><dd>Knowledge Sources API (kaynak ve sync) ve Search API. Kimlik ve girdi kontrolü yapar, Postgres'e kayıt yazar, sync için hemen 202 döner. Ağır iş yapmaz.</dd><dt>Stateless</dt><dd>API kendi içinde bir şey hatırlamaz, her şey Postgres'te. Bu yüzden 1 pod da çalışabilir, 20 pod da; Kubernetes yük artınca pod ekler (HPA).</dd></dl>
+<div class="decide"><div><b>Hangi problemi çözüyor?</b> İstemciye net bir sözleşme; isteği doğrulayıp kalıcı kaydetmek.</div><div><b>Neden şimdi?</b> 1. aşama: o olmadan sistem yok.</div><div><b>Daha basit alternatif:</b> Yok; istemcinin doğrudan veritabanına yazması kabul edilemez.</div><div><b>Bedeli:</b> Ağır işi içinde yaparsa timeout; stateless tutulmalı.</div></div>
+<div class="say">The API layer is stateless. It validates the request, records it durably, and returns 202. The heavy work happens in workers.</div>
+</section>
+<section class="term" id="lro" data-k="202 accepted long running operation lro polling status uzun süren location ">
+<h3>202 Accepted ve uzun süren iş <a class="anchor" href="#lro">#</a></h3><div class="tags"><span class="tag a">Aşama 1</span></div>
+<dl class="kv"><dt>Ne?</dt><dd>"İsteğini aldım ve kaydettim, ama iş henüz bitmedi" demek. Cevapta işin durumunu sorgulayabileceğin bir adres döner (<code>Location</code> header'ı).</dd><dt>Benzetme</dt><dd>Kuru temizlemecinin fişi. Elbiseyi bıraktın, fişi aldın; ne zaman hazır olduğunu fişle sorarsın.</dd><dt>Bizde</dt><dd>Sync dakikalar ya da saatler sürebilir. İstemci <code>GET /v1/syncs/{id}</code> ile durumu sorar. Durumlar: <code>queued → running → succeeded | failed | cancelled</code>.</dd><dt>Dikkat</dt><dd>202 dönmeden önce iş <b>kalıcı olarak kaydedilmiş</b> olmalı. Kaydetmediğin işi kabul etme.</dd></dl>
+
+<div class="say">This operation can take minutes, so instead of holding the request open I return 202 with a status resource the client can poll.</div>
+</section>
+<section class="term" id="idempotency" data-k="idempotency idempotent tekrar retry idempotency-key duplicate tekrarlı ">
+<h3>Idempotency <a class="anchor" href="#idempotency">#</a></h3><div class="tags"><span class="tag a">Aşama 1, 2</span></div>
+<dl class="kv"><dt>Ne?</dt><dd>Aynı isteği bir kez de yapsan, beş kez de yapsan sonuç aynı kalır.</dd><dt>Benzetme</dt><dd>Asansör düğmesi. Beş kez bassan da asansör bir kez gelir.</dd><dt>Bizde</dt><dd>Her POST bir <code>Idempotency-Key</code> taşır: aynı key + aynı içerik → aynı sync; farklı içerik → 409. Kafka'dan gelen mesajlar da tekrar gelebilir, o yüzden worker upsert eder.</dd><dt>Detay</dt><dd><a href="hata.html#idempotency">Sources API nasıl idempotent olur? →</a></dd><dt>Gerçek hayattan</dt><dd>Ödeme sistemlerinde aynı işlem iki farklı yoldan tetiklenirse iki müşteri kaydı ya da iki fatura oluşabilir. Çözüm önce tasarımda: her yan etkinin <b>tek bir sahibi</b> olsun; idempotency key bunun üstüne güvenlik ağı.</dd></dl>
+
+<div class="say">Clients will retry, so every mutating call accepts an Idempotency-Key. And each side effect has exactly one owner, with the key as a safety net.</div>
+</section>
+<section class="term" id="postgres" data-k="postgres veritabanı database transaction unique constraint kalıcı ">
+<h3>Postgres <a class="anchor" href="#postgres">#</a></h3><div class="tags"><span class="tag a">Aşama 1</span></div>
+<dl class="kv"><dt>Ne?</dt><dd>Ana veritabanı. Kalıcı ve doğru olması gereken her şey burada.</dd><dt>Bizde</dt><dd><code>sources</code>, <code>sync_jobs</code>, <code>pending_events</code>, <code>documents</code>, <code>document_acl</code>. <a href="cozum.html#veri">Örnek satırlar →</a></dd><dt>Neden</dt><dd>Transaction ve unique constraint ile doğruluğu garanti eder. Başka bir veritabanını (ör. Cassandra) ancak gerçek bir yazma sınırına ulaşınca önerirsin.</dd><dt>Multi-tenant</dt><dd>Her tabloda <code>tenant_id</code>; bir müşteri asla başka müşterinin verisini görmemeli. <a href="../ortak.html#tenant">Katmanlar →</a></dd></dl>
+<div class="decide"><div><b>Hangi problemi çözüyor?</b> Kalıcı ve doğru durum; unique ve transaction ile kuralları veritabanı garanti eder.</div><div><b>Neden şimdi?</b> 1. aşama.</div><div><b>Daha basit alternatif:</b> Bu zaten en basit seçenek. Başka veritabanı ancak gerçek bir yazma sınırında.</div><div><b>Bedeli:</b> Tek yazma noktası; büyüyünce read replica ve partition.</div></div>
+<div class="say">Postgres is the source of truth. Uniqueness and state transitions are enforced there, not just in application code.</div>
+</section>
+<section class="term" id="pending-events" data-k="pending_events pending events event publisher outbox transactional outbox relay transaction kesikli ok kuyruk mesaj kaybolma ">
+<h3>pending_events ve event publisher <span class="muted small">(diyagramdaki kesikli ok)</span> <a class="anchor" href="#pending-events">#</a></h3><div class="tags"><span class="tag a">Aşama 2</span></div>
+<dl class="kv"><dt>Ne?</dt><dd>Veritabanına yazarken, aynı transaction içinde "bunu kuyruğa gönder" notunu da <code>pending_events</code> tablosuna yazmak. Ayrı bir süreç (<b>event publisher</b>) bu satırları okuyup kuyruğa gönderir, sonra "gönderildi" diye işaretler.</dd><dt>Neden</dt><dd>"Önce DB'ye yaz, sonra kuyruğa gönder" dersen, arada çökersen iş kaydedilmiş ama hiç yapılmamış olur. pending_events ile ikisi aynı anda olur ya da hiç olmaz.</dd><dt>Benzetme</dt><dd>Garson siparişi deftere yazarken mutfak fişini de aynı anda yazar; biri yazılıp diğeri unutulamaz. Event publisher, fişleri mutfağa taşıyan komidir.</dd><dt>Literatürdeki adı</dt><dd>Bu desenin yaygın adı <b>transactional outbox</b>; tabloya "outbox", publisher'a "relay" de denir. Mülakatçı bu kelimeleri kullanırsa aynı şeyden bahsediyor.</dd><dt>Nerede çalışır?</dt><dd>Aynı repoda, ama API'den ayrı bir süreç: <code>cmd/api</code>, <code>cmd/event-publisher</code>, <code>cmd/sync-worker</code>. Aynı imaj, farklı başlatma komutu, ayrı Kubernetes Deployment. <a href="../ortak.html#publisher">Detay →</a></dd></dl>
+<div class="decide"><div><b>Hangi problemi çözüyor?</b> Veritabanına yazıp kuyruğa mesajı kaybetme riski.</div><div><b>Neden şimdi?</b> 2. aşama: Kafka ile birlikte.</div><div><b>Daha basit alternatif:</b> Kuyruk yok: worker işi doğrudan Postgres'ten <code>SKIP LOCKED</code> ile alır.</div><div><b>Bedeli:</b> Ek tablo ve süreç; mesaj iki kez gidebilir, tüketici idempotent olmalı.</div></div>
+<div class="say">I write the job and a pending_events row in the same transaction, and an event publisher sends it to the queue. This is the transactional outbox pattern. The publisher may send twice, so consumers are idempotent.</div>
+</section>
+<section class="term" id="kafka" data-k="kafka topic partition key consumer group offset commit kuyruk queue pub/sub at-least-once retry dead letter dlt dlq sync-jobs acl-changes">
+<h3>Kafka topic <span class="muted small">(kuyruk)</span> <a class="anchor" href="#kafka">#</a></h3><div class="tags"><span class="tag a">Aşama 2, 5</span></div>
+<dl class="kv"><dt>Ne?</dt><dd>Mesajların sırayla eklendiği kalıcı bir kayıt defteri (log). Bir taraf topic'e yazar, diğer taraf (worker) okur.</dd><dt>Benzetme</dt><dd>Restoranda garsonla mutfak arasındaki sipariş defteri. Sayfalar yırtılmaz; her aşçı "en son kaçıncı siparişte kaldım" numarasını (offset) tutar.</dd><dt>Neden</dt><dd>API ile worker'ı ayırır. Ani yükü emer; worker yetişemese bile istek kaybolmaz, çöken worker'ın işini başkası devralır.</dd><dt>Bizde</dt><dd><code>sync-jobs</code> (key = <code>source_id</code>, aynı kaynağın işleri sırayla). 5. aşamada <code>acl-changes</code> (key = <code>document_id</code>, öncelikli). <a href="cozum.html#veri">Örnek mesajlar →</a></dd><dt>Bilmen gerekenler</dt><dd><ul><li><b>Partition ve key:</b> Aynı key hep aynı partition'a gider, sırası korunur. Paralellik partition sayısı kadardır; bir partition'ı aynı anda bir consumer okur.</li><li><b>Consumer group ve offset:</b> Worker'lar bir grup olarak okur; iş bitince offset commit edilir. Commit etmeden ölürse mesaj tekrar okunur. Yani at-least-once: işlem <a href="#idempotency">idempotent</a> olmalı.</li><li><b>Retry ve dead-letter topic:</b> Kafka'da mesaj başına "ack/nack" yok. Başarısız mesaj retry topic'ine, defalarca başarısızsa dead-letter topic'e (DLT) yazılır ve alarm çalar; partition tıkanmaz.</li></ul></dd></dl>
+<div class="decide"><div><b>Hangi problemi çözüyor?</b> İşi kabul etmeyi yapmaktan ayırmak, ani yükü emmek, key başına sıra.</div><div><b>Neden şimdi?</b> İlk çözümde: sync işleri, webhook olayları ve izin değişiklikleri aynı hattan akacak; yeni bir büyük tenant yüz binlerce olay üretir ve bu yük API'nin Postgres'ine binmemeli. <a href="cozum.html#neden-kafka">Ayrıntı →</a></div><div><b>Daha basit alternatif:</b> Postgres iş tablosu + <code>SKIP LOCKED</code>; sadece sync işleri olsaydı yeterdi.</div><div><b>Bedeli:</b> İşletme yükü; retry ve dead-letter topic'i kendin kurarsın; partition sayısı paralelliği sınırlar.</div></div>
+<div class="say">The topic decouples accepting work from doing it. Same key goes to the same partition, so order is kept per key. Delivery is at-least-once, so consumers are idempotent, and failing messages go to a retry topic and then a dead-letter topic.</div>
+</section>
+<section class="term" id="sync-worker" data-k="sync worker cursor delta token checkpoint hash upsert senkronizasyon worker keda">
+<h3>Sync worker <a class="anchor" href="#sync-worker">#</a></h3><div class="tags"><span class="tag a">Aşama 2</span></div>
+<dl class="kv"><dt>Ne?</dt><dd>Kaynağa gidip değişiklikleri çeken ve içeri alan arka plan programı. Kullanıcı onu görmez.</dd><dt>Ne yapar</dt><dd><ol><li>Kaynağa "en son sana şuradan sormuştum, ondan sonra ne değişti?" der. Bu "şuradan" bilgisine <b>cursor</b> (delta token) denir.</li><li>Değişen dokümanları sayfa sayfa çeker. Her sayfadan sonra cursor'ı kaydeder (<b>checkpoint</b>); çökerse kaldığı yerden devam eder.</li><li>İçeriğin <b>hash</b>'ine bakar: aynıysa tekrar işlemez.</li><li>Dokümanı ve izinlerini Postgres'e <b>upsert</b> eder. Aynı mesaj iki kez gelse de sonuç aynı kalır.</li></ol></dd><dt>Ölçekleme</dt><dd>Worker sayısı CPU'ya değil Kafka'daki birikmeye (lag) göre artar (KEDA). Üst sınır partition sayısı.</dd></dl>
+<div class="decide"><div><b>Hangi problemi çözüyor?</b> Kaynaktan değişiklikleri çekip kaydetmek; çökerse kaldığı yerden devam.</div><div><b>Neden şimdi?</b> 2. aşama.</div><div><b>Daha basit alternatif:</b> API isteğinde senkron çekmek (küçük kaynaklarda bile timeout riski).</div><div><b>Bedeli:</b> Cursor checkpoint ve idempotent upsert gerekir.</div></div>
+<div class="say">The sync worker pulls changes with the source's cursor, checkpoints after each page, skips unchanged content by hash, and upserts idempotently.</div>
+</section>
+<section class="term" id="source-apps" data-k="source apps kaynak uygulama drive slack quota kota 429">
+<h3>Kaynak uygulamalar <span class="muted small">(Source apps)</span> <a class="anchor" href="#source-apps">#</a></h3><div class="tags"><span class="tag a">Aşama 2</span></div>
+<dl class="kv"><dt>Ne?</dt><dd>Müşterinin bilgisinin durduğu yerler: Google Drive, Slack, wiki, SharePoint.</dd><dt>Önemli</dt><dd>Bunlar bizim kontrolümüzde değil. Kota koyarlar (429), yavaşlarlar, çökerler.</dd></dl>
+
+<div class="say">The source APIs are the real bottleneck: quotas, not our QPS.</div>
+</section>
+<section class="term" id="acl" data-k="acl izin permission erişim access control fail closed öncelik priority lane search document_acl">
+<h3>ACL ve ACL worker <a class="anchor" href="#acl">#</a></h3><div class="tags"><span class="tag a">Aşama 3, 5</span></div>
+<dl class="kv"><dt>ACL</dt><dd>Access Control List: "Bu dokümanı kim görebilir?" listesi. Örneğin: <code>muhasebe-grubu</code>, <code>ayse@firma.com</code>.</dd><dt>Nerede tutulur?</dt><dd>Postgres'te ayrı bir tablo: <code>document_acl (tenant_id, document_id, principal_id)</code>. Sync worker kaynaktaki paylaşım ayarlarını buraya kopyalar; arama sorgusu bu tabloyla filtreler. Kullanıcının grupları ise IdP'den gelir, 4. aşamada Redis'te 5 dk cache'lenir.</dd><dt>Neden kritik</dt><dd>Asistan bir dokümanı, kaynakta göremeyen birine asla göstermemeli. Bu hata güvenlik ihlalidir ve kurumsal müşteri kaybettirir.</dd><dt>Arama sırasında</dt><dd>Önce izne göre filtrele, sonra sırala. İzin bilinmiyorsa dokümanı gösterme (<b>fail closed</b>). <a href="hata.html#acl-first">ACL filter first: SQL'de nasıl? →</a></dd><dt>ACL worker</dt><dd>5. aşama. İzin değişikliklerini ve silmeleri işleyen, ayrı ve <b>öncelikli</b> bir worker. Büyük bir müşterinin 5 milyon dokümanlık ilk senkronu kuyruğu doldurduğunda, "Ahmet'in erişimi kaldırıldı" mesajı onun arkasında saatlerce beklememeli.</dd></dl>
+<div class="decide"><div><b>Hangi problemi çözüyor?</b> İzin iptalinin büyük bir sync'in arkasında beklememesi.</div><div><b>Neden şimdi?</b> Follow-up (5. aşama): "erişim kaldırıldı, ne kadar sürede yansır?"</div><div><b>Daha basit alternatif:</b> Tek kuyruk, öncelik yok (ilk sürüm).</div><div><b>Bedeli:</b> Ayrı topic ve worker; iki yoldan yazarken sıra ve tutarlılık.</div></div>
+<div class="say">Permission changes and deletions go through a separate priority lane, because a revoked user must stop seeing a document within minutes, even while a big tenant is onboarding. Search filters by permissions before ranking, and fails closed.</div>
+</section>
+<section class="term" id="redis" data-k="redis cache rate limit token bucket önbellek bellek grup quota">
+<h3>Redis <a class="anchor" href="#redis">#</a></h3><div class="tags"><span class="tag a">Aşama 4</span></div>
+<dl class="kv"><dt>Ne?</dt><dd>Bellekte çalışan, çok hızlı (&lt;1 ms) anahtar-değer deposu. Kalıcı gerçek veri burada durmaz.</dd><dt>Bizde iki işi var</dt><dd><ul><li><b>Grup cache'i:</b> <code>groups:{tenant}:{user}</code>, 5 dakika. Search API her aramada IdP'ye gitmesin.</li><li><b>Kaynak kotası:</b> <code>quota:{tenant}:{source}</code> token bucket. Sync worker kaynağı boğmasın.</li></ul></dd></dl>
+<div class="decide"><div><b>Hangi problemi çözüyor?</b> Arama gecikmesi (grup sorgusu) ve kaynak 429'ları.</div><div><b>Neden şimdi?</b> Follow-up (4. aşama): bu sorunlar görülünce.</div><div><b>Daha basit alternatif:</b> Her seferinde IdP'ye sor; 429 gelince <code>Retry-After</code>'a uy.</div><div><b>Bedeli:</b> Cache'te kısa süreli eski veri (TTL); bir sistem daha.</div></div>
+<div class="say">Redis holds fast, disposable state: a short-lived group cache and quota counters. If it's lost, we degrade; we don't lose data.</div>
+</section>
+<section class="term" id="webhook" data-k="webhook bildirim imza signature polling reconciliation">
+<h3>Webhook <a class="anchor" href="#webhook">#</a></h3><div class="tags"><span class="tag a">Aşama 4</span></div>
+<dl class="kv"><dt>Ne?</dt><dd>Kaynağın bize "şu doküman değişti" diye haber vermesi. Biz sürekli sormuyoruz, o bize söylüyor.</dd><dt>Bizde</dt><dd>İmzayı doğrula (gerçekten Google mı?), sadece "doc X değişti" bilgisini Kafka'ya yaz, hemen 204 dön. İçeriğe güvenme, kaynaktan tekrar çek.</dd><dt>Not</dt><dd>Webhook'lar bazen kaybolur. O yüzden periyodik kontrol (polling) yine de çalışır.</dd></dl>
+<div class="decide"><div><b>Hangi problemi çözüyor?</b> Değişikliği dakikalar yerine saniyeler içinde görmek.</div><div><b>Neden şimdi?</b> Follow-up (4. aşama): tazelik isteği polling'le karşılanamazsa.</div><div><b>Daha basit alternatif:</b> Periyodik polling (delta cursor ile).</div><div><b>Bedeli:</b> İmza doğrulama, kaynak başına ayrı format; bildirim kaybolabilir, polling yine kalır.</div></div>
+<div class="say">Webhooks make us faster, polling makes us correct. We keep both.</div>
+</section>
+<section class="term" id="embedding" data-k="embedding vektör vector semantik anlam chunk pgvector full-text">
+<h3>Embedding <span class="muted small">(diyagramda yok)</span> <a class="anchor" href="#embedding">#</a></h3>
+<dl class="kv"><dt>Bu turda</dt><dd>Çizime koyma. Arama indeksinin iç detayı; arama veya ML ekibinin konusu, infra API tasarımında değerlendirilmez. Sorulursa aşağıdaki tek cümle yeter.</dd><dt>Ne?</dt><dd>Bir metni anlamını temsil eden bir sayı listesine (vektör) çevirmek. "Babalık izni" araması, içinde "ebeveyn izni" geçen dokümanı da bulur.</dd></dl>
+
+<div class="say">Documents are split into chunks and turned into vectors for semantic search; I'd treat the index as its own component, starting with pgvector in Postgres, and only re-embed when the content hash changes.</div>
+</section>
+<nav class="pager"><a href="olcek.html">← 5 · Ölçek ve follow-up</a><a href="mock.html">Mock →</a></nav>
+</main>
+<footer>Kişisel çalışma notları. Senaryolar alıştırma amaçlıdır; şirket adları anonimleştirilmiştir.</footer>
+<script>
+(function () {
+  const q = document.getElementById('q');
+  const terms = Array.from(document.querySelectorAll('.term'));
+  const count = document.getElementById('count');
+  const norm = s => s.toLocaleLowerCase('tr');
+  q.addEventListener('input', () => {
+    const v = norm(q.value.trim());
+    let n = 0;
+    terms.forEach(t => {
+      const hit = !v || norm(t.textContent + ' ' + (t.dataset.k || '')).includes(v);
+      t.classList.toggle('hidden', !hit);
+      if (hit) n++;
+    });
+    count.textContent = v ? n + ' kavram bulundu' : '';
+  });
+})();
+</script>
+</body>
+</html>

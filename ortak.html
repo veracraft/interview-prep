@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ortak konular</title>
+<link rel="stylesheet" href="assets/site.css?v=11">
+</head>
+<body>
+<header class="topbar"><div class="topbar-inner">
+  <a class="brand" href="index.html">Mülakat Hazırlığı</a>
+  <nav>
+    <a class="active" href="index.html">Ana sayfa</a>
+    <a href="knowledge-sync/kapsam.html">Knowledge Sync</a>
+    <a href="agent-tasks/kapsam.html">Agent Tasks</a>
+    <a href="deployment-api/kapsam.html">Deployment API</a>
+  </nav>
+</div>
+<div class="subnav"><nav>
+    <a href="index.html">Playbook</a>
+    <a href="plan.html">Bugünün planı</a>
+    <a href="anlatim.html">Nasıl anlatırım?</a>
+    <a href="sorular.html">Genel takip soruları</a>
+    <a class="active" href="ortak.html">Ortak konular</a>
+    <a href="index.html#paket">Baskı paketi</a>
+</nav></div></header>
+
+<main class="wide">
+<h1>Ortak konular</h1>
+<p class="lead">Üç sistemde de geçerli, ayrıntı isteyen konular. Her sistemin "Hata ve güvenlik" sayfası buraya link verir.</p>
+<nav class="toc"><b>Bu sayfada</b><ol><li><a href="#token">Tenant token'dan nasıl gelir?</a></li><li><a href="#publisher">Event publisher nerede çalışır?</a></li><li><a href="#cursor">Cursor ve offset farkı</a></li><li><a href="#tenant">Multi-tenancy katmanları</a></li></ol></nav>
+<h2 id="token">Tenant token'dan nasıl gelir?</h2>
+<p><b>Evet, token'daki bir claim'den.</b> Kullanıcı giriş yaptığında kimlik sağlayıcı (IdP: Okta, Auth0 ya da şirketin kendi auth servisi) ona <b>imzalı</b> bir JWT verir. JWT'nin ortasındaki kısım (payload) claim'lerdir:</p>
+<pre>{
+  "sub": "user_ali",            ← kim
+  "org_id": "ten_42",           ← hangi müşteri (tenant)
+  "roles": ["admin"],           ← ne yapabilir
+  "iss": "https://auth.acme.com",
+  "exp": 1794310000             ← ne zamana kadar geçerli
+}</pre>
+<ol>
+<li><b>Gateway imzayı doğrular.</b> IdP'nin public key'iyle (JWKS) imzaya, <code>iss</code>'e ve <code>exp</code>'e bakar. İmza tutuyorsa claim'lere güvenilir: biri <code>org_id</code>'yi değiştirirse imza bozulur, istek 401 alır.</li>
+<li><b>Doğrulanmış claim'ler servise geçer.</b> Gateway <code>X-Tenant-Id: ten_42</code> gibi bir header ekler ve istemciden gelen aynı isimli header'ı siler. (Ya da servis token'ı kendisi tekrar doğrular.)</li>
+<li><b>Servis tenant'ı sadece buradan alır.</b> Body'de ya da URL'de bir tenant alanı olsa bile ona bakmaz; her sorgu bu tenant ile sınırlanır.</li>
+</ol>
+<p class="small"><b>Diğer çağıranlar:</b> CI'ın OIDC token'ında repo bilgisi var; API repo → takım eşlemesini kendi veritabanında tutar. API key kullanan entegrasyonlarda key veritabanında bir tenant'a bağlıdır. Birden çok müşteriye üye bir kullanıcı organizasyon seçince o organizasyon için yeni bir token alır.</p>
+<div class="say">The tenant comes from a claim in the signed token, like org_id. The gateway verifies the signature and expiry, so the client can't change it, and the service never reads the tenant from the body.</div>
+
+<h2 id="publisher">Event publisher nerede çalışır?</h2>
+  <p><b>Kısa cevap:</b> Aynı repoda, ama API'den ayrı bir süreç olarak. <a href="knowledge-sync/sozluk.html#pending-events">pending_events ve event publisher</a> nedir, sözlükte.</p>
+<pre>cmd/api/main.go
+cmd/event-publisher/main.go
+cmd/sync-worker/main.go       (Agent Tasks'ta: cmd/agent-worker)
+internal/...                  (store, domain, events: ortak kod)</pre>
+  <ul>
+    <li><b>Tek Docker imajı, farklı başlatma komutu.</b> Her biri ayrı Kubernetes Deployment.</li>
+    <li><b>Neden ayrı?</b> API, HTTP trafiğine göre ölçeklenir (HPA). Publisher'a 1–2 replika yeter. Publisher çökerse ya da deploy edilirse API etkilenmez. Kendi metriği olur: <b>pending_events lag</b>, yani gönderilmemiş en eski satırın yaşı.</li>
+  </ul>
+  <h3>Publisher'ın döngüsü</h3>
+<pre>BEGIN;
+SELECT id, topic, payload FROM pending_events
+ WHERE published_at IS NULL
+ ORDER BY id LIMIT 100
+ FOR UPDATE SKIP LOCKED;          -- iki replika aynı satırı almaz
+-- her satırı Kafka topic'ine gönder
+UPDATE pending_events SET published_at = now() WHERE id = ANY($ids);
+COMMIT;</pre>
+  <ul>
+    <li>Gönderdikten sonra, işaretlemeden önce çökerse mesaj <b>iki kez</b> gider (at-least-once). Tüketiciler idempotent olduğu için sorun olmaz.</li>
+    <li>Gönderilmiş satırlar periyodik olarak silinir (ör. 7 gün sonra).</li>
+  </ul>
+  <h3>Alternatifler</h3>
+  <div class="table-wrap"><table>
+    <tr><th>Seçenek</th><th>Artı</th><th>Eksi</th></tr>
+    <tr><td>API'nin <code>main.go</code>'sunda goroutine</td><td>En basit; MVP için kabul edilebilir.</td><td>Her API pod'u bir publisher çalıştırır; API ile birlikte ölçeklenir ve deploy edilir.</td></tr>
+    <tr><td><b>Ayrı Deployment (önerilen)</b></td><td>Bağımsız ölçek, bağımsız hata, net metrik.</td><td>Bir Deployment daha.</td></tr>
+    <tr><td>CDC (Debezium, Datastream)</td><td>Postgres WAL'ını okur; polling yok.</td><td>Ek altyapı ve işletme yükü.</td></tr>
+  </table></div>
+  <div class="say">It lives in the same repo but runs as its own process: same image, different entrypoint, separate deployment. It polls pending_events with SKIP LOCKED, publishes, and marks rows as sent. It's at-least-once, so consumers are idempotent.</div>
+
+  <h2 id="cursor">Cursor ve offset farkı</h2>
+  <div class="table-wrap"><table>
+    <tr><th></th><th>Offset</th><th>Cursor</th></tr>
+    <tr><td>Ne der?</td><td>"İlk 10.000 satırı atla, sonraki 50'yi ver."</td><td>"En son gördüğümden sonraki 50'yi ver."</td></tr>
+    <tr><td>Benzetme</td><td>Kitapta sayfaları tek tek sayarak 300. sayfaya gitmek.</td><td>Kitaptaki ayraç.</td></tr>
+    <tr><td>Hız</td><td>Atlanan satırlar yine okunur; sayfa ilerledikçe yavaşlar.</td><td>Index doğrudan o noktaya atlar; sayfa 1 de 1000 de aynı hızda.</td></tr>
+    <tr><td>Araya ekleme olursa</td><td>Her şey bir kayar: bir kaydı iki kez görürsün ya da birini kaçırırsın.</td><td>Kayma olmaz.</td></tr>
+    <tr><td>Bedeli</td><td>–</td><td>"37. sayfaya atla" yapılamaz. API'lerde buna zaten pek ihtiyaç olmaz.</td></tr>
+  </table></div>
+<pre>-- offset
+SELECT * FROM documents WHERE tenant_id = $t
+ ORDER BY created_at DESC, id DESC LIMIT 50 OFFSET 10000;
+
+-- cursor: (created_at, id) son görülen satırdan gelir
+SELECT * FROM documents WHERE tenant_id = $t
+   AND (created_at, id) &lt; ($son_tarih, $son_id)
+ ORDER BY created_at DESC, id DESC LIMIT 50;</pre>
+  <ul>
+    <li><code>id</code> sıralamaya eklenir, çünkü aynı <code>created_at</code>'e sahip iki satır olabilir.</li>
+    <li>İstemciye <b>opak</b> bir base64 string verilir (<code>next_cursor</code>); istemci içeriğine bağımlı olmasın. Sayfa boyutuna üst sınır konur.</li>
+    <li>Kaynağın <b>delta cursor</b>'ı (Drive'ın changes token'ı) başka bir şeydir; ortak yanı "kaldığım yer" demesi.</li>
+  </ul>
+  <div class="say">Offset makes the database read and throw away all skipped rows, and rows shift when new ones are inserted. A cursor says "give me the next 50 after this one", so it uses the index, stays fast, and doesn't skip or repeat items.</div>
+
+  <h2 id="tenant">Multi-tenancy: <code>WHERE tenant_id</code> yeterli mi?</h2>
+  <p><b>Hayır.</b> O tek bir katman; bir sorguda unutulursa veri sızar. Katman katman korunur (defense in depth):</p>
+  <div class="table-wrap"><table>
+    <tr><th>Katman</th><th>Ne yapılır?</th></tr>
+    <tr><td><b>Kimlik / gateway</b></td><td><code>tenant_id</code> sadece doğrulanmış JWT'den gelir; body, header ya da path'ten asla alınmaz. Başka tenant'ın kaynağı istenirse <b>404</b> dönülür (403 değil; kaynağın varlığını da sızdırmaz).</td></tr>
+    <tr><td><b>Backend</b></td><td>Tenant request context'te taşınır. Store katmanında tenant parametresi almayan metot olmaz. Redis key'leri, idempotency key'leri ve cache'ler tenant prefix'li olur.</td></tr>
+    <tr><td><b>Postgres</b></td><td>Her tabloda <code>tenant_id</code> olur ve composite index'in ilk kolonudur. Foreign key'ler tenant'ı da içerir, böylece A'nın dokümanı B'nin kaynağına bağlanamaz. <b>RLS</b> açılır; uygulama rolü tablo sahibi olmaz ve <code>BYPASSRLS</code> yetkisi almaz. Kod <code>WHERE</code>'i unutsa bile DB engeller.</td></tr>
+    <tr><td><b>Async</b></td><td>Her mesaj <code>tenant_id</code> taşır; worker DB'ye dokunmadan önce tenant'ı yeniden ayarlar. Tenant başına rate limit ve adil sıralama olur; bu da performans izolasyonudur (noisy neighbor).</td></tr>
+    <tr><td><b>Depolama / cloud</b></td><td>GCS yolu <code>tenants/{id}/…</code> olur. OAuth token'ları Secret Manager'da tutulur. Büyük kurumsal müşteriye kendi KMS anahtarı (CMEK) verilir. Bölge seçimi yapılır (AB verisi AB'de kalır).</td></tr>
+    <tr><td><b>İzolasyon modeli</b></td><td>Pooled (ortak DB + RLS) → bridge (büyük tenant'a ayrı schema veya DB) → silo (regüle müşteriye ayrı proje veya cluster).</td></tr>
+    <tr><td><b>DevOps / test</b></td><td>Her endpoint için otomatik test: "A'nın token'ı + B'nin id'si → 404". RLS testleri owner ile değil, uygulama rolüyle koşulur. Log ve trace'te <code>tenant_id</code> olur. Destek erişimi break-glass ile ve audit log'a yazılarak verilir. Tenant silinince DB, vektörler, GCS ve cache temizlenir.</td></tr>
+  </table></div>
+<pre>-- A'nın dokümanı B'nin kaynağına bağlanamaz
+FOREIGN KEY (tenant_id, source_id) REFERENCES sources (tenant_id, id)
+
+-- RLS
+ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON documents
+  USING (tenant_id = current_setting('app.tenant_id'));
+
+-- her transaction başında (connection pool yüzünden SET değil SET LOCAL)
+SET LOCAL app.tenant_id = 'ten_42';</pre>
+  <div class="say">Tenant isolation is defense in depth: the tenant comes only from the verified token, every query is scoped, Postgres row-level security catches mistakes, and we test cross-tenant access on every endpoint.</div>
+
+  
+</main>
+<footer>Kişisel çalışma notları. Senaryolar alıştırma amaçlıdır; şirket adları anonimleştirilmiştir.</footer>
+
+</body>
+</html>

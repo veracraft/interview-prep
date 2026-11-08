@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deployment API · Mock</title>
+<link rel="stylesheet" href="../assets/site.css?v=11">
+<style>
+.phase { font-size: 13px; color: var(--text-3); text-transform: none; letter-spacing: .2px; margin: 26px 0 8px; display: flex; gap: 10px; align-items: center; }
+.phase::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
+.turn { display: grid; grid-template-columns: 92px 1fr; gap: 10px; margin: 10px 0; }
+.who { font-size: 13px; font-weight: 600; padding-top: 9px; text-align: right; }
+.who.i { color: #9FE1CB; }
+.who.me { color: #CECBF6; }
+.bubble { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 8px 12px; }
+.turn.me .bubble { background: var(--say-bg); border-color: #6f69a8; }
+.bubble pre { margin: 6px 0 2px; font-size: 13px; }
+details.tip { margin: 6px 0 12px 102px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 12px; font-size: 14.5px; }
+details.tip summary { cursor: pointer; color: var(--text-2); }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+body.hide-me .turn.me .bubble > * { visibility: hidden; }
+body.hide-me .turn.me .bubble { background: repeating-linear-gradient(45deg, var(--surface), var(--surface) 8px, var(--surface-2) 8px, var(--surface-2) 16px); }
+@media (max-width: 600px) { .turn { grid-template-columns: 1fr; gap: 2px; } .who { text-align: left; padding-top: 0; } details.tip { margin-left: 0; } }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="topbar-inner">
+  <a class="brand" href="../index.html">Mülakat Hazırlığı</a>
+  <nav>
+    <a href="../index.html">Ana sayfa</a>
+    <a href="../knowledge-sync/kapsam.html">Knowledge Sync</a>
+    <a href="../agent-tasks/kapsam.html">Agent Tasks</a>
+    <a class="active" href="kapsam.html">Deployment API</a>
+  </nav>
+</div>
+<div class="subnav"><nav>
+    <a href="kapsam.html">1 · Kapsam</a>
+    <a href="api.html">2 · API</a>
+    <a href="cozum.html">3 · Minimum çözüm</a>
+    <a href="hata.html">4 · Hata ve güvenlik</a>
+    <a href="olcek.html">5 · Ölçek ve follow-up</a>
+    <a href="sozluk.html">Sözlük</a>
+    <a class="active" href="mock.html">Mock</a>
+</nav></div></header>
+
+<main>
+<h1>Deployment API · Mock mülakat</h1>
+<p class="lead">Infra rolüne en yakın soru için kısaltılmış bir görüşme. Interviewer doğal İngilizce konuşuyor; aday (sen) basit B2 İngilizcesiyle.</p>
+<div class="note small">
+    <b>Nasıl çalışılır?</b>
+    <ol style="margin:4px 0 0">
+      <li>Bir kez baştan sona sesli oku; iki rolü de sen oku.</li>
+      <li>"Adayın cevaplarını gizle"ye bas. Interviewer'ı oku, cevabı <b>kendi cümlelerinle</b> sesli söyle, sonra gizlemeyi kapatıp karşılaştır.</li>
+      <li>Telefonla kendini kaydet. Cevaplar 20-40 saniyeyi geçiyorsa kısalt.</li>
+    </ol>
+    Yeşil notlar (▸ Neden işe yarıyor?) Türkçe koçluk notlarıdır.
+  </div>
+  <div class="controls">
+<button class="btn" type="button" id="toggle">Adayın cevaplarını gizle</button>
+<button class="btn" type="button" id="tips">Koçluk notlarını aç</button>
+</div>
+  <p class="small muted">Infra rolüne en yakın soru: ürün değil, iç platform API'si. Tanışma kısmı Mock A ile aynı. <a href="kapsam.html">Deployment API sayfası</a> · <a href="cozum.html#diyagram">Diyagram C</a></p>
+  <div class="phase">03:00 · Problem ve netleştirme</div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">We have about two hundred services, owned by different teams, running on Kubernetes. Today every team deploys in its own way. We want one internal API that teams use to deploy their services, from CI or from a CLI. Design the API and the system behind it.</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">Okay. Some questions first. Who calls the API, only CI pipelines or also engineers from laptop? And what do you already use for deploys, something like Argo CD?</div></div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">Both, but mostly CI. We already run Argo CD with a config repo, and Terraform for the clusters.</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">How many clusters and regions? And which strategies you want, only rolling update or also canary?</div></div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">Three clusters in two regions. Canary would be great, with automatic rollback.</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">For production, does someone need to approve? And are the images signed?</div></div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">Yes to both. Prod needs a second person, and CI signs the images.</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">Okay. So it's not big scale, a few hundred deploys per day. The hard parts are correctness, like two deploys at the same time or a rollout that stops in the middle, and security: who can deploy what.</div></div>
+  <details class="tip"><summary>Neden işe yarıyor?</summary>Ölçeğin küçük olduğunu söyleyip zorluğu doğruluk ve güvenliğe taşıman, gereksiz Kafka/Cassandra konuşmasını baştan keser ve doğru problemi gördüğünü gösterir.</details>
+  <div class="phase">07:00 · API</div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">I start with the API.
+<pre>POST /v1/services/{service}/deployments   → 202 + Location  (Idempotency-Key)
+GET  /v1/deployments/{id}                 → status, current step
+GET  /v1/services/{service}/deployments   → history, cursor
+POST /v1/deployments/{id}:approve         → prod approval
+POST /v1/deployments/{id}:rollback        → 202
+POST /v1/deployments/{id}:cancel          → 202</pre>
+  The body has the environment, the image by digest, and the strategy. Status goes pending, progressing, maybe awaiting approval, then succeeded, failed, rolled back or cancelled.</div></div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">Why the digest and not a tag?</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">A tag can move, a digest can not. So we know exactly what is running, and a rollback goes back to exactly the old version.</div></div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">What happens if CI sends the same request twice, or two people deploy the same service?</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">Same request twice: the Idempotency-Key returns the same deployment. Two different deploys for the same service and environment: only one can be active, there is a partial unique index in Postgres, so the second one gets 409 with the id of the running deployment.</div></div>
+  <details class="tip"><summary>Neden işe yarıyor?</summary>API kısmında üç şey puan getirir: digest gerekçesi, idempotency ile "tek aktif iş" kuralını ayırman ve 409'da çalışan deploy'un id'sini dönmen (istemci ne yapacağını bilir).</details>
+  <div class="phase">14:00 · Basit v1</div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">Okay, how does it work behind the API?</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">Simple version first. CI calls the gateway, the gateway checks the OIDC token, then the Deploy API. The API checks the team owns the service, writes a deployment row with status pending and returns 202. A deploy worker takes pending rows from Postgres with SELECT FOR UPDATE SKIP LOCKED, and commits the new image digest to the config repo. Argo CD syncs it to the clusters, and the worker watches the status and writes the progress back. CI polls the status.</div></div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">Why not put a queue like Kafka in between?</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">We can, but it's a few hundred deploys per day. Postgres can be the queue here, it's one less system to run. If later other systems want to listen to deploy events, I add a pending_events table and a publisher, but not now.</div></div>
+  <details class="tip"><summary>Neden işe yarıyor?</summary>Gereksiz parçayı reddetmek kıdem sinyali; "ne zaman eklerdim" koşulunu da söylediğin için inatçı görünmezsin.</details>
+    <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">You already have Argo CD. Why do we need an API at all? Teams could just open a PR to the config repo.</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">For a small team, a PR is enough. But then the rules are in many places: who owns the service, is the image signed, who approved prod. And CI has to read Git, Argo CD and Rollouts to know the status. The API keeps the rules and the status in one place, and it still uses Git and Argo CD underneath. I don't write my own deploy engine.</div></div>
+  <details class="tip"><summary>Neden işe yarıyor?</summary>Mülakatçı mevcut araçları savunabilir; sen GitOps'u reddetmiyorsun, üstüne politika ve durum katmanı koyuyorsun. "I don't write my own deploy engine" cümlesi infra rolünde güçlü bir sinyal.</details>
+<div class="phase">20:00 · Canary ve rollback</div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">How does the canary work, and when do you roll back?</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">We use Argo Rollouts for this, I don't write it myself. It goes in steps: ten percent, fifty, then hundred. After each step an analysis checks Prometheus: error rate and p99 of the new pods compared with the old pods. If it is worse, Rollouts aborts and goes back to the old version by itself, and the worker sees it and marks the deployment rolled back.</div></div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">Why compare with the old pods and not a fixed threshold?</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">Because traffic changes during the day. If I compare at the same time, a busy hour doesn't look like a bad deploy.</div></div>
+  <details class="tip"><summary>Neden işe yarıyor?</summary>Mutlak eşik yerine eşzamanlı karşılaştırma, gerçek canary deneyimi gibi duyulur.</details>
+  <div class="phase">26:00 · Hata senaryoları</div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">The worker crashes in the middle of a rollout. What happens?</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">The rollout doesn't stop, because Argo CD and Rollouts don't need the worker. The worker only commits and watches. It has a lease on the deployment row; when the lease expires, another worker takes it, sees the commit is already in the repo, and just continues watching.</div></div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">And if the Deploy API itself is down during an incident?</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">Running services are not affected, the API is not in the path of customer traffic. Running rollouts also continue, because Argo CD does the work. For an emergency rollback the team can revert the commit in the config repo directly, and the Git history is the audit log. But I run the API in more than one zone, so this should be rare.</div></div>
+  <details class="tip"><summary>Neden işe yarıyor?</summary>"API müşteri trafiğinin yolunda değil" cümlesi bu tasarımın en önemli güvenilirlik argümanı. Break-glass'ı audit ile söylemek de olgunluk gösterir.</details>
+  <div class="phase">31:00 · Güvenlik</div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">How do you make sure nobody deploys something random to production?</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">Four things. CI has its own identity with OIDC, no long-lived secrets. The API checks the team owns the service. Only signed images, and the cluster checks it again with an admission policy. And production needs a second person to approve. Everything goes to the audit log.</div></div>
+  <details class="tip"><summary>Neden işe yarıyor?</summary>Dört katmanı sayarak söylemek (kimlik, sahiplik, imza, onay) cevabı akılda kalır yapar.</details>
+  <div class="phase">35:00 · Ölçüm ve kapanış</div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">Last one: what would you measure?</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">Deploy success rate, how long a deploy takes, how many rollbacks, and the time from merge to production per team. And for the API itself the normal ones: error rate and latency.</div></div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">Great, thanks. That's all from my side.</div></div>
+  <details class="tip"><summary>Neden işe yarıyor?</summary>"Merge'den production'a süre" platform ekibinin gerçek başarı ölçüsü: geliştirici deneyimini önemsediğini gösterir.</details>
+
+  
+<h2 id="gramer">Küçük gramer notları</h2>
+<p class="small muted">Bu hatalar anlaşılmayı bozmaz; mülakatta dert etme. Ama düzeltmek istersen:</p>
+<div class="table-wrap"><table class="small"><tr><th>Mock'taki</th><th>Doğrusu</th></tr><tr><td>engineers from laptop</td><td>engineers from their laptops</td></tr><tr><td>which strategies you want</td><td>which strategies do you want</td></tr><tr><td>a digest can not</td><td>a digest can't</td></tr></table></div>
+<nav class="pager"><a href="sozluk.html">← Sözlük</a></nav>
+</main>
+<footer>Kişisel çalışma notları. Senaryolar alıştırma amaçlıdır; şirket adları anonimleştirilmiştir.</footer>
+<script>
+(function () {
+  const t = document.getElementById('toggle');
+  t.addEventListener('click', () => {
+    const on = document.body.classList.toggle('hide-me');
+    t.textContent = on ? 'Adayın cevaplarını göster' : 'Adayın cevaplarını gizle';
+  });
+  const tips = document.getElementById('tips');
+  tips.addEventListener('click', () => {
+    const all = document.querySelectorAll('details.tip');
+    const open = !Array.from(all).every(d => d.open);
+    all.forEach(d => { d.open = open; });
+    tips.textContent = open ? 'Koçluk notlarını kapat' : 'Koçluk notlarını aç';
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Knowledge Sync · Hata ve güvenlik</title>
+<link rel="stylesheet" href="../assets/site.css?v=11">
+</head>
+<body>
+<header class="topbar"><div class="topbar-inner">
+  <a class="brand" href="../index.html">Mülakat Hazırlığı</a>
+  <nav>
+    <a href="../index.html">Ana sayfa</a>
+    <a class="active" href="kapsam.html">Knowledge Sync</a>
+    <a href="../agent-tasks/kapsam.html">Agent Tasks</a>
+    <a href="../deployment-api/kapsam.html">Deployment API</a>
+  </nav>
+</div>
+<div class="subnav"><nav>
+    <a href="kapsam.html">1 · Kapsam</a>
+    <a href="api.html">2 · API</a>
+    <a href="cozum.html">3 · Minimum çözüm</a>
+    <a class="active" href="hata.html">4 · Hata ve güvenlik</a>
+    <a href="olcek.html">5 · Ölçek ve follow-up</a>
+    <a href="sozluk.html">Sözlük</a>
+    <a href="mock.html">Mock</a>
+</nav></div></header>
+
+<main class="wide">
+<h1>Knowledge Sync · 4. Hata ve güvenlik</h1>
+<div class="step-hint"><b>Playbook 4/5 · Hata ve güvenlik.</b> Ne yaparsın: retry, eşzamanlılık, çökme, yetki, silme. Her cevap: karar → gerekçe → bedel. Gösterdiğin: sistemin güvenilir olduğunu.</div>
+<h2 id="kararlar">Karar soruları</h2>
+<p class="small muted">Her cevap aynı kalıpta: <b>karar → gerekçe → bedel veya alternatif</b>. "Neden Kafka?" sorusu <a href="cozum.html#neden-kafka">3. adımda</a>.</p>
+<div class="table-wrap"><table><tr><th>Soru</th><th>Karar</th><th>Gerekçe</th><th>Bedel / alternatif</th></tr><tr id="k1"><td><b>What must be saved before returning 202?</b></td><td><code>sync_jobs</code> + <code>pending_events</code> satırları (idempotency key ile) tek transaction'da commit edilir.</td><td>202 "kabul ettim, kaybolmayacak" sözüdür; commit olmadan bu söz boş.</td><td>Her istekte bir DB yazımı. DB yoksa işi kabul etme: 503 + Retry-After.</td></tr><tr id="k2"><td><b>What happens when the client retries?</b></td><td><code>Idempotency-Key</code>: aynı key + aynı body → aynı sync; aynı key + farklı body → 409.</td><td>Ağ koparsa istemci isteğin işlenip işlenmediğini bilemez; tekrar göndermesi güvenli olmalı. <code>POST /v1/sources</code>'ta kritik: OAuth code tek kullanımlık.</td><td>Key'i ~24 saat saklamak. Alternatif: key yok, sadece "tek aktif sync" kuralı (farklı body'yi yakalayamaz).</td></tr><tr id="k3"><td><b>What if another sync is already running?</b></td><td>Kaynak başına tek aktif sync (partial unique index). Yeni istek mevcut sync'i 200 ile alır.</td><td>İki sync aynı cursor'ı ezer ve kaynağın kotasını ikiye böler.</td><td>İstemci "zaten çalışıyor"u ayırt etmeli. Alternatif: 409 + çalışan sync'in id'si.</td></tr><tr id="k4"><td><b>Who may start or inspect this sync?</b></td><td>Tenant token'dan. Başlatma: tenant admin. Görme: admin + viewer. Başka tenant'ın id'si → 404.</td><td>Sync kaynak kotası harcar; durum bilgisi kaynak adlarını sızdırabilir.</td><td>Basit bir rol modeli. Token'da kaba rol, ince izin servis içinde.</td></tr><tr id="k5"><td><b>How does the client see progress or failure?</b></td><td><code>Location</code> → <code>GET /v1/syncs/{id}</code>: durum, ilerleme sayıları, hata kodu ve mesajı.</td><td>Uzun iş; polling en basit ve her proxy'den geçer.</td><td>Polling yükü: önerilen aralık ya da Retry-After. Anında haber gerekirse webhook.</td></tr><tr id="k6"><td><b>What does deleting a source do to ongoing work and stored data?</b></td><td>DELETE → 202, kaynak <code>deleting</code>: yeni sync 409, çalışan sync bir sonraki sayfada durur, arama hemen hariç tutar, dokümanlar, izinler ve token arka planda silinir.</td><td>Büyük kaynakta silme dakikalar sürer, ama kullanıcı sonuçta hemen görmemeli.</td><td>"Silindi ama verisi bir süre duruyor" penceresi; bitince 404. Silme süresini (GDPR) belgele.</td></tr><tr id="k9"><td><b>What if the sync worker crashes in the middle?</b></td><td>Offset commit edilmez, mesaj başka worker'a gider. Cursor her sayfadan sonra kaydedildiği için kaldığı sayfadan devam eder.</td><td>Çökme ve deploy normal durumlar; yarım kalan iş tekrar denenebilir olmalı.</td><td>Aynı sayfa iki kez işlenebilir; upsert ve içerik hash'i sayesinde zararsız.</td></tr><tr id="k7"><td><b>How do we know it's healthy?</b></td><td>Semptom metrikleri: en eski bekleyen işin yaşı (lag), sync başarı oranı, kaynak başına 429 oranı, izin iptali gecikmesi. Alarm SLO'ya göre.</td><td>CPU değil, kullanıcının gördüğü etki önemli. Infra rolünde güçlü yanın.</td><td>Metrik işçiliği; tenant etiketinde kardinaliteye dikkat.</td></tr></table></div>
+<h2 id="acl-first">ACL filter first: izinler sorguda</h2>
+  <p>İki ayrı soru var: <b>tenant</b> "hangi şirket?" sorusunu, <b><a href="sozluk.html#acl">ACL</a></b> "şirket içinde bu dokümanı kim görebilir?" sorusunu cevaplar. Örnek: maaş zammı dokümanını sadece İK grubu görebilir.</p>
+  <div class="table-wrap"><table>
+    <tr><th></th><th>Post-filter (yanlış)</th><th>Pre-filter (doğru)</th></tr>
+    <tr><td>Sıra</td><td>Önce en alakalı 10 dokümanı al, sonra yetkisizleri at.</td><td>Önce kullanıcının görebildikleriyle sınırla, sonra bunlar arasında sırala.</td></tr>
+    <tr><td>Sonuç</td><td>Belki 0 sonuç kalır. Yetkisiz içerik o ana kadar LLM'e, loga ya da cache'e gitmiş olabilir.</td><td>Her zaman kullanıcının görebildiği en iyi 10 doküman.</td></tr>
+  </table></div>
+  <p><b>SQL seviyesinde mi?</b> Bizim tasarımda evet, aynı sorguda:</p>
+<pre>SELECT d.id, d.title
+FROM documents d
+WHERE d.tenant_id = $tenant
+  AND EXISTS (SELECT 1 FROM document_acl a
+              WHERE a.tenant_id = d.tenant_id
+                AND a.document_id = d.id
+                AND a.principal_id = ANY($principals))
+  AND matches(d, $query)                 -- arama indeksi
+ORDER BY relevance(d, $query) DESC       -- nasıl sıraladığı bu turun konusu değil
+LIMIT 10;</pre>
+  <ul>
+    <li><b><code>$principals</code></b>: kullanıcı id'si + grupları + <code>domain:acme.com</code>. Search API bunları IdP'den alır ve <a href="sozluk.html#redis">Redis</a>'te 5 dakika cache'ler. Grup servisi çökerse <b>fail closed</b>: emin değilsen gösterme.</li>
+    <li><b>Ölçekte dikkat:</b> Arama ileride Postgres'ten ayrı bir arama motoruna taşınırsa, izinli principal'lar her dokümanla birlikte o indekse de yazılır ve filtre motorun içinde uygulanır. Her durumda filtre uygulama kodunda sonradan değil, <b>sorgu motorunun içinde</b> uygulanır.</li>
+    <li><b>İzin iptali</b> öncelikli şeritten gider (ACL iptali p99 &lt; 5 dk). Agent'ın search tool'u da aynı filtreyi kullanıcının principal'larıyla uygular.</li>
+  </ul>
+  <div class="say">I filter by permissions inside the query, before ranking, not after. Post-filtering can return nothing and can leak content into the prompt or logs. If the permission service is down, we fail closed.</div>
+
+  
+<h2 id="idempotency">Idempotency: Sources API'de nasıl?</h2>
+  <p>Ağ koparsa istemci aynı isteği tekrar gönderir. Amaç: tekrar gelen istek ikinci bir kaynak ya da ikinci bir sync yaratmasın. <a href="sozluk.html#idempotency">Idempotency</a> sözlükte.</p>
+  <ol>
+    <li><b><code>Idempotency-Key</code> header'ı:</b> Her POST'ta gönderilir. Tek transaction içinde:
+      <ul>
+        <li>Key yoksa: kaydet, sync satırını ve <code>pending_events</code> satırını yaz, cevabı sakla, 202 dön.</li>
+        <li>Aynı key ve aynı body gelirse: saklanan cevabı aynen dön.</li>
+        <li>Aynı key ama farklı body gelirse: 409.</li>
+        <li>Key'ler 24 saat sonra silinir.</li>
+      </ul></li>
+    <li><b>İş kuralı:</b> Partial unique index ile kaynak başına tek aktif sync. Farklı key'lerle bile iki sync başlamaz; mevcut sync 200 ile ya da 409 ile döner.</li>
+    <li><b><code>POST /v1/sources</code>'ta neden kritik:</b> OAuth code tek kullanımlıktır. Key olmadan yapılan bir retry code exchange'de patlar; key ile saklanan sonuç döner.</li>
+    <li><b>Doğal idempotent işlemler:</b> <code>PUT</code> ve <code>DELETE</code> doğası gereği idempotenttir. Tekrar edilen <code>DELETE</code> aynı sonucu verir.</li>
+    <li><b>Arkası da idempotent:</b> Publisher iki kez gönderebilir. Worker <code>(source_id, external_id)</code> ile upsert eder ve <code>content_hash</code> aynıysa atlar.</li>
+  </ol>
+<p class="small"><b>Basit hali (diyagramdaki):</b> <code>sync_jobs</code> tablosunda bir <code>idempotency_key</code> kolonu ve <code>UNIQUE (tenant_id, idempotency_key)</code>. Aynı key tekrar gelirse mevcut sync satırı dönülür. <b>Ayrıntılı hali:</b> ayrı bir tablo; ilk cevabı aynen saklar ve aynı key ile farklı body geleni yakalar:</p>
+<pre>idempotency_keys (tenant_id, key, request_hash, response_code, response_body, created_at,
+                  PRIMARY KEY (tenant_id, key))
+
+sync_jobs: UNIQUE (source_id) WHERE status IN ('queued','running')   -- tek aktif sync</pre>
+  <div class="say">Every POST takes an Idempotency-Key. In one transaction I store the key with a hash of the body, create the sync and the pending_events row, and save the response. A retry with the same key gets the same response; a different body gets 409. A partial unique index also guarantees one active sync per source.</div>
+
+  
+<h2 id="tenant">Multi-tenancy</h2>
+<p>Tenant sadece doğrulanmış token'dan gelir; her sorgu <code>tenant_id</code> ile sınırlanır, Postgres RLS hatayı yakalar, foreign key'ler tenant'ı içerir (A'nın dokümanı B'nin kaynağına bağlanamaz). Katman katman: <a href="../ortak.html#tenant">Ortak konular → multi-tenancy</a>.</p>
+<nav class="pager"><a href="cozum.html">← 3 · Minimum çözüm</a><a href="olcek.html">5 · Ölçek ve follow-up →</a></nav>
+</main>
+<footer>Kişisel çalışma notları. Senaryolar alıştırma amaçlıdır; şirket adları anonimleştirilmiştir.</footer>
+
+</body>
+</html>

@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Tasks · Ölçek ve follow-up</title>
+<link rel="stylesheet" href="../assets/site.css?v=11">
+<script src="../assets/diagrams.js?v=11"></script>
+<style>
+details.qa { padding: 10px 16px; }
+details.qa summary { cursor: pointer; font-size: 16.5px; }
+details.qa[open] summary { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="topbar-inner">
+  <a class="brand" href="../index.html">Mülakat Hazırlığı</a>
+  <nav>
+    <a href="../index.html">Ana sayfa</a>
+    <a href="../knowledge-sync/kapsam.html">Knowledge Sync</a>
+    <a class="active" href="kapsam.html">Agent Tasks</a>
+    <a href="../deployment-api/kapsam.html">Deployment API</a>
+  </nav>
+</div>
+<div class="subnav"><nav>
+    <a href="kapsam.html">1 · Kapsam</a>
+    <a href="api.html">2 · API</a>
+    <a href="cozum.html">3 · Minimum çözüm</a>
+    <a href="hata.html">4 · Hata ve güvenlik</a>
+    <a class="active" href="olcek.html">5 · Ölçek ve follow-up</a>
+    <a href="sozluk.html">Sözlük</a>
+    <a href="mock.html">Mock</a>
+</nav></div></header>
+
+<main class="wide">
+<h1>Agent Tasks · 5. Ölçek ve follow-up</h1>
+<div class="step-hint"><b>Playbook 5/5 · Ölçek ve follow-up.</b> Ne yaparsın: önce darboğazı adlandır, sonra parçayı ekle; daha basit alternatifi ve geçiş koşulunu söyle. Gösterdiğin: kararlarını ihtiyaca bağlayabildiğini.</div>
+<h2 id="diyagram">Akış: 5. aşama</h2>
+<p class="small muted">Diyagram 5. aşamadan açılıyor; butonlarla önceki aşamalara dönebilirsin.</p>
+<div class="diagram" id="diagB" data-start="5" data-all="Üst sıra istek ve model yolu, sağ sütun yürütme ve tool&#x27;lar, alt sıra canlı akış. Kesikli oklar asenkron teslim ya da stream.">
+  <div class="pills"></div>
+  <svg class="arch" viewBox="0 0 1050 680" role="img" aria-labelledby="diagB-t diagB-d"><title id="diagB-t">Agent Tasks mimarisi</title><desc id="diagB-d">İstemci, gateway, Agent Tasks API, Postgres, event publisher, Kafka topic, agent worker, LLM gateway, LLM sağlayıcı, Redis stream, tool executor ve dış uygulamalar; oklar numaralıdır.</desc><defs>
+<marker id="diagBm1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#AFA9EC" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<marker id="diagBm2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#5DCAA5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<marker id="diagBm3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#F0997B" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<marker id="diagBm4" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#EF9F27" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<marker id="diagBm5" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#ED93B1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+</defs>
+<g class="c-purple stg" data-s="1" data-e="9"><rect x="20" y="40" width="100" height="56" rx="6" stroke-width="0.6"/><text class="th" x="70" y="59" text-anchor="middle" dominant-baseline="central">Client</text><text class="ts" x="70" y="77" text-anchor="middle" dominant-baseline="central">web, Slack</text></g>
+<g class="c-purple stg" data-s="1" data-e="9" data-term="gateway"><rect x="220" y="40" width="100" height="56" rx="6" stroke-width="0.6"/><text class="th" x="270" y="59" text-anchor="middle" dominant-baseline="central">Gateway</text><text class="ts" x="270" y="77" text-anchor="middle" dominant-baseline="central">JWT, limits</text></g>
+<g class="c-purple stg" data-s="1" data-e="9" data-term="api"><rect x="420" y="40" width="140" height="56" rx="6" stroke-width="0.6"/><text class="th" x="490" y="59" text-anchor="middle" dominant-baseline="central">Agent Tasks API</text><text class="ts" x="490" y="77" text-anchor="middle" dominant-baseline="central">POST → 202</text></g>
+<g class="c-purple stg" data-s="1" data-e="9" data-term="postgres"><rect x="660" y="40" width="150" height="56" rx="6" stroke-width="0.6"/><text class="th" x="735" y="59" text-anchor="middle" dominant-baseline="central">Postgres</text><text class="ts" x="735" y="77" text-anchor="middle" dominant-baseline="central">tablolar aşağıda ↓</text></g>
+<g class="c-teal stg" data-s="2" data-e="9" data-term="llm-provider"><rect x="900" y="40" width="130" height="56" rx="6" stroke-width="0.6"/><text class="th" x="965" y="59" text-anchor="middle" dominant-baseline="central">LLM provider</text><text class="ts" x="965" y="77" text-anchor="middle" dominant-baseline="central">model API</text></g>
+<g class="c-teal stg" data-s="2" data-e="9" data-term="pending-events"><rect x="660" y="180" width="150" height="56" rx="6" stroke-width="0.6"/><text class="th" x="735" y="199" text-anchor="middle" dominant-baseline="central">Event publisher</text><text class="ts" x="735" y="217" text-anchor="middle" dominant-baseline="central">pending_events</text></g>
+<g class="c-teal stg" data-s="2" data-e="9" data-term="kafka"><rect x="660" y="320" width="150" height="56" rx="6" stroke-width="0.6"/><text class="th" x="735" y="339" text-anchor="middle" dominant-baseline="central">Kafka topic</text><text class="ts" x="735" y="357" text-anchor="middle" dominant-baseline="central">task-queue</text></g>
+<g class="c-teal stg" data-s="2" data-e="9" data-term="agent-worker"><rect x="900" y="320" width="130" height="56" rx="6" stroke-width="0.6"/><text class="th" x="965" y="339" text-anchor="middle" dominant-baseline="central">Agent worker</text><text class="ts" x="965" y="357" text-anchor="middle" dominant-baseline="central">lease, steps</text></g>
+<g class="c-coral stg" data-s="3" data-e="9" data-term="tool-executor"><rect x="900" y="460" width="130" height="56" rx="6" stroke-width="0.6"/><text class="th" x="965" y="479" text-anchor="middle" dominant-baseline="central">Tool executor</text><text class="ts" x="965" y="497" text-anchor="middle" dominant-baseline="central">timeout, OAuth</text></g>
+<g class="c-coral stg" data-s="3" data-e="9" data-term="tool-executor"><rect x="900" y="600" width="130" height="56" rx="6" stroke-width="0.6"/><text class="th" x="965" y="619" text-anchor="middle" dominant-baseline="central">External apps</text><text class="ts" x="965" y="637" text-anchor="middle" dominant-baseline="central">Jira, CRM</text></g>
+<g class="c-amber stg" data-s="4" data-e="9" data-term="stream"><rect x="660" y="460" width="150" height="56" rx="6" stroke-width="0.6"/><text class="th" x="735" y="479" text-anchor="middle" dominant-baseline="central">Redis stream</text><text class="ts" x="735" y="497" text-anchor="middle" dominant-baseline="central">events + seq</text></g>
+<g class="c-pink stg" data-s="5" data-e="9" data-term="llm-gateway"><rect x="900" y="180" width="130" height="56" rx="6" stroke-width="0.6"/><text class="th" x="965" y="199" text-anchor="middle" dominant-baseline="central">LLM gateway</text><text class="ts" x="965" y="217" text-anchor="middle" dominant-baseline="central">budget, fallback</text></g>
+<g class="stg" data-s="1" data-e="9"><path d="M120 60 L218 60" stroke="#AFA9EC" stroke-width="1.6" fill="none" marker-end="url(#diagBm1)"/><text class="al" x="170" y="52" text-anchor="middle" fill="#AFA9EC">1 · POST</text></g>
+<g class="stg" data-s="1" data-e="9"><path d="M320 60 L418 60" stroke="#AFA9EC" stroke-width="1.6" fill="none" marker-end="url(#diagBm1)"/><text class="al" x="370" y="52" text-anchor="middle" fill="#AFA9EC">2 · auth</text></g>
+<g class="stg" data-s="1" data-e="9"><path d="M560 68 L658 68" stroke="#AFA9EC" stroke-width="1.6" fill="none" marker-end="url(#diagBm1)"/><text class="al" x="610" y="60" text-anchor="middle" fill="#AFA9EC">3 · INSERT</text></g>
+<g class="stg" data-s="2" data-e="9"><path d="M735 96 L735 178" stroke="#5DCAA5" stroke-width="1.6" fill="none" stroke-dasharray="5 4" marker-end="url(#diagBm2)"/><text class="al" x="728" y="142" text-anchor="end" fill="#5DCAA5">4 · poll</text></g>
+<g class="stg" data-s="2" data-e="9"><path d="M735 236 L735 318" stroke="#5DCAA5" stroke-width="1.6" fill="none" stroke-dasharray="5 4" marker-end="url(#diagBm2)"/><text class="al" x="728" y="282" text-anchor="end" fill="#5DCAA5">5 · publish</text></g>
+<g class="stg" data-s="2" data-e="9"><path d="M810 348 L898 348" stroke="#5DCAA5" stroke-width="1.6" fill="none" marker-end="url(#diagBm2)"/><text class="al" x="855" y="368" text-anchor="middle" fill="#5DCAA5">6 · read</text></g>
+<g class="stg" data-s="2" data-e="5"><path d="M965 320 L965 98" stroke="#5DCAA5" stroke-width="1.6" fill="none" marker-end="url(#diagBm2)"/><text class="al" x="972" y="150" text-anchor="start" fill="#5DCAA5">7 · LLM</text></g>
+<g class="stg" data-s="2" data-e="9"><path d="M900 330 L855 330 L855 82 L812 82" stroke="#5DCAA5" stroke-width="1.6" fill="none" marker-end="url(#diagBm2)"/><text class="al" x="848" y="282" text-anchor="end" fill="#5DCAA5">8 · checkpoint</text></g>
+<g class="stg" data-s="3" data-e="9"><path d="M965 376 L965 458" stroke="#F0997B" stroke-width="1.6" fill="none" marker-end="url(#diagBm3)"/><text class="al" x="972" y="422" text-anchor="start" fill="#F0997B">9 · tool</text></g>
+<g class="stg" data-s="3" data-e="9"><path d="M965 516 L965 598" stroke="#F0997B" stroke-width="1.6" fill="none" marker-end="url(#diagBm3)"/><text class="al" x="972" y="562" text-anchor="start" fill="#F0997B">10 · API</text></g>
+<g class="stg" data-s="4" data-e="9"><path d="M910 376 L812 460" stroke="#EF9F27" stroke-width="1.6" fill="none" marker-end="url(#diagBm4)"/><text class="al" x="877" y="440" text-anchor="start" fill="#EF9F27">11 · XADD</text></g>
+<g class="stg" data-s="4" data-e="9"><path d="M660 488 L490 488 L490 98" stroke="#EF9F27" stroke-width="1.6" fill="none" marker-end="url(#diagBm4)"/><text class="al" x="497" y="300" text-anchor="start" fill="#EF9F27">12 · XREAD</text></g>
+<g class="stg" data-s="4" data-e="9"><path d="M420 82 L322 82" stroke="#EF9F27" stroke-width="1.6" fill="none" stroke-dasharray="5 4" marker-end="url(#diagBm4)"/><text class="al" x="370" y="100" text-anchor="middle" fill="#EF9F27">13 · SSE</text></g>
+<g class="stg" data-s="4" data-e="9"><path d="M220 82 L122 82" stroke="#EF9F27" stroke-width="1.6" fill="none" stroke-dasharray="5 4" marker-end="url(#diagBm4)"/><text class="al" x="170" y="100" text-anchor="middle" fill="#EF9F27">14 · SSE</text></g>
+<g class="stg" data-s="5" data-e="9"><path d="M965 320 L965 238" stroke="#ED93B1" stroke-width="1.6" fill="none" marker-end="url(#diagBm5)"/><text class="al" x="972" y="282" text-anchor="start" fill="#ED93B1">15 · LLM</text></g>
+<g class="stg" data-s="5" data-e="9"><path d="M965 180 L965 98" stroke="#ED93B1" stroke-width="1.6" fill="none" marker-end="url(#diagBm5)"/><text class="al" x="972" y="142" text-anchor="start" fill="#ED93B1">16 · call</text></g>
+</svg>
+  <div class="stage-text"><div class="t"></div><div class="d"></div></div>
+  <div class="btns"><button class="btn" type="button" data-act="prev">← Önceki</button><button class="btn" type="button" data-act="next">Sonraki →</button><button class="btn" type="button" data-act="all">Hepsi</button></div>
+</div>
+<details class="note arrows" open><summary><b>Okların açıklaması</b></summary><div class="table-wrap"><table><tr><th>No</th><th>Nereden → nereye</th><th>Ne yapar?</th></tr><tr><td style="white-space:nowrap"><span class="dot" style="background:#ED93B1"></span><b>15</b></td><td style="white-space:nowrap">Agent worker → LLM gateway</td><td>Model çağrısı artık buradan geçer.</td></tr><tr><td style="white-space:nowrap"><span class="dot" style="background:#ED93B1"></span><b>16</b></td><td style="white-space:nowrap">LLM gateway → LLM provider</td><td>Tenant bütçesi kontrolü, 429'da backoff, gerekirse fallback model, maliyet ölçümü.</td></tr></table></div></details>
+<details class="note"><summary><b>Aşamaların yazılı özeti</b></summary><ol class="small"><li><b>5 · Follow-up: maliyet koruması.</b> <b>Sorulursa ekle</b>, ör. "Bir müşteri binlerce task gönderirse?" Worker ile model arasına <a href="sozluk.html#llm-gateway" target="_blank" rel="noopener">LLM gateway</a> girer: worker modeli artık gateway üzerinden çağırır (ok 15 → 16; ok 7'nin yerini alır). Tenant başına token bütçesi, 429'da backoff, gerekirse fallback model, circuit breaker ve maliyet ölçümü burada. Asıl kısıt CPU değil, LLM kotası ve maliyeti.</li></ol></details>
+<h2 id="veri">Bu aşamanın verisi</h2>
+<div class="dm"><div class="dm-card"><div class="dm-kind">Redis · 5. aşama</div><pre><b>budget:ten_42:2026-11-10</b>
+  tip: sayaç (günlük token bütçesi)
+  used: 1250000
+  limit: 5000000
+      ← dolunca yeni task 429</pre></div></div>
+<h2 id="followup">Follow-up soruları</h2>
+<p class="small muted">Önce soruyu oku, 20 saniyede kendi cevabını sesli söyle, sonra aç. Genel sorular: <a href="../sorular.html">Genel takip soruları</a>.</p>
+<details class="term qa"><summary><b>1.</b> One customer suddenly sends thousands of tasks. What happens?</summary>
+<p class="small muted" style="margin:8px 0 4px">Ana fikir: LLM gateway'de tenant bütçesi; yeni task'lar 429 + Retry-After; worker'larda tenant başına eşzamanlılık sınırı.</p>
+<div class="say">All model calls go through the LLM gateway, which keeps a token budget per tenant. When a tenant is over, new tasks get 429 with Retry-After, and a per-tenant concurrency limit on workers keeps other customers unaffected.</div>
+</details>
+<details class="term qa"><summary><b>2.</b> The model provider is down or returns 429.</summary>
+<p class="small muted" style="margin:8px 0 4px">Ana fikir: Backoff, circuit breaker, aynı bölgede yedek model; olmazsa bekleyen task'lar kuyrukta kalır.</p>
+<div class="say">The gateway backs off, opens a circuit breaker if errors continue, and falls back to another model only if it's allowed for the customer's region. If nothing works, tasks wait in the queue instead of failing.</div>
+</details>
+<details class="term qa"><summary><b>3.</b> How many open streams can one API pod hold?</summary>
+<p class="small muted" style="margin:8px 0 4px">Ana fikir: SSE bağlantısı ucuz ama sayılı; API'yi açık bağlantı sayısına göre ölçekle, CPU'ya göre değil; heartbeat.</p>
+<div class="say">An SSE connection is cheap but not free, so I scale the API on open connections, not CPU, and plan a few thousand per pod. A heartbeat every 15 seconds keeps the gateway from closing idle streams.</div>
+</details>
+<details class="term qa"><summary><b>4.</b> A task waits hours for approval.</summary>
+<p class="small muted" style="margin:8px 0 4px">Ana fikir: Worker'ı tutma: task requires_action'a geçer, lease bırakılır; onay gelince tekrar kuyruğa; süre dolunca expired.</p>
+<div class="say">The worker doesn't wait. The task moves to requires_action and releases its lease; the approval puts it back on the queue. If nobody answers in, say, 24 hours, it expires.</div>
+</details>
+<details class="term qa"><summary><b>5.</b> How do you control cost?</summary>
+<p class="small muted" style="margin:8px 0 4px">Ana fikir: Task başına token × task sayısı; tenant bütçesi; bağlam boyutunu sınırla; basit adımlar için ucuz model; tenant başına maliyet paneli.</p>
+<div class="say">Cost is tokens per task times tasks per day, and the model is the biggest cost, not CPU. I control it with per-tenant budgets, limits on context size, cheaper models for simple steps, and cost per tenant on a dashboard.</div>
+</details>
+<details class="term qa"><summary><b>6.</b> What about multiple regions and data residency?</summary>
+<p class="small muted" style="margin:8px 0 4px">Ana fikir: Tenant bir bölgeye bağlı: veritabanı, stream ve model uç noktası aynı bölgede; yedek model sadece izinli bölgede.</p>
+<div class="say">Each tenant is pinned to a region: database, stream and model endpoint all live there, and fallback only uses models allowed in that region.</div>
+</details>
+<nav class="pager"><a href="hata.html">← 4 · Hata ve güvenlik</a><a href="sozluk.html">Sözlük →</a></nav>
+</main>
+<footer>Kişisel çalışma notları. Senaryolar alıştırma amaçlıdır; şirket adları anonimleştirilmiştir.</footer>
+<script>initStepper("diagB", [{"n": "1 · Temel istek", "c": "#AFA9EC", "d": "İstemci <code>POST /tasks</code> ile bir <a href=\"sozluk.html#task\" target=\"_blank\" rel=\"noopener\">task</a> başlatır (ok 1); istek <a href=\"sozluk.html#gateway\" target=\"_blank\" rel=\"noopener\">gateway</a>'den geçer (ok 2). <a href=\"sozluk.html#api\" target=\"_blank\" rel=\"noopener\">Agent Tasks API</a> Idempotency-Key'i kontrol eder, task satırını <a href=\"sozluk.html#postgres\" target=\"_blank\" rel=\"noopener\">Postgres</a>'e 'queued' olarak yazar (ok 3) ve 202 + task id döner. İstemci <code>GET /tasks/{id}</code> ile polling yapar. En basit, sağlam hal."}, {"n": "2 · Asenkron yürütme", "c": "#5DCAA5", "d": "Task satırıyla aynı transaction'da bir <a href=\"sozluk.html#pending-events\" target=\"_blank\" rel=\"noopener\">pending_events</a> satırı yazılır; <a href=\"sozluk.html#pending-events\" target=\"_blank\" rel=\"noopener\">event publisher</a> onu okur (ok 4) ve <a href=\"sozluk.html#kafka\" target=\"_blank\" rel=\"noopener\">Kafka</a>'daki <code>task-queue</code> topic'ine yazar (ok 5). <a href=\"sozluk.html#agent-worker\" target=\"_blank\" rel=\"noopener\">Agent worker</a> mesajı alır (ok 6), task'ı lease ile sahiplenir, <a href=\"sozluk.html#llm-provider\" target=\"_blank\" rel=\"noopener\">LLM</a>'i çağırır (ok 7) ve her adımdan sonra durumu Postgres'e kaydeder (ok 8, checkpoint). API pod'u ölse ya da deploy olsa bile task devam eder; worker ölürse lease biter, başka worker kaldığı yerden devralır."}, {"n": "3 · Tool çağrıları", "c": "#F0997B", "d": "Model bir tool isterse worker <a href=\"sozluk.html#tool-executor\" target=\"_blank\" rel=\"noopener\">tool executor</a>'ı çağırır (ok 9); executor Jira, CRM gibi uygulamaları kullanıcının kendi OAuth'u ile çağırır (ok 10). Timeout zorunlu. Yazan tool'larda idempotency key ve gerekirse kullanıcı onayı; timeout sonrası sonuç belirsiz olabilir."}, {"n": "4 · Canlı akış", "c": "#EF9F27", "d": "Worker her olayı (token, tool başladı, bitti) sıra numarasıyla <a href=\"sozluk.html#stream\" target=\"_blank\" rel=\"noopener\">Redis stream</a>'e yazar (ok 11). Agent Tasks API stream'den okur (ok 12) ve SSE ile gateway üzerinden istemciye akıtır (ok 13–14, kesikli). Bağlantı koparsa istemci Last-Event-ID ile kaldığı yerden devam eder. Çalıştıran ile yayın yapan ayrı olduğu için kopma task'ı öldürmez."}, {"n": "5 · Follow-up: maliyet koruması", "c": "#ED93B1", "d": "<b>Sorulursa ekle</b>, ör. \"Bir müşteri binlerce task gönderirse?\" Worker ile model arasına <a href=\"sozluk.html#llm-gateway\" target=\"_blank\" rel=\"noopener\">LLM gateway</a> girer: worker modeli artık gateway üzerinden çağırır (ok 15 → 16; ok 7'nin yerini alır). Tenant başına token bütçesi, 429'da backoff, gerekirse fallback model, circuit breaker ve maliyet ölçümü burada. Asıl kısıt CPU değil, LLM kotası ve maliyeti."}]);</script>
+</body>
+</html>

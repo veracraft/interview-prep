@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nasıl anlatırım?</title>
+<link rel="stylesheet" href="assets/site.css?v=11">
+</head>
+<body>
+<header class="topbar"><div class="topbar-inner">
+  <a class="brand" href="index.html">Mülakat Hazırlığı</a>
+  <nav>
+    <a class="active" href="index.html">Ana sayfa</a>
+    <a href="knowledge-sync/kapsam.html">Knowledge Sync</a>
+    <a href="agent-tasks/kapsam.html">Agent Tasks</a>
+    <a href="deployment-api/kapsam.html">Deployment API</a>
+  </nav>
+</div>
+<div class="subnav"><nav>
+    <a href="index.html">Playbook</a>
+    <a href="plan.html">Bugünün planı</a>
+    <a class="active" href="anlatim.html">Nasıl anlatırım?</a>
+    <a href="sorular.html">Genel takip soruları</a>
+    <a href="ortak.html">Ortak konular</a>
+    <a href="index.html#paket">Baskı paketi</a>
+</nav></div></header>
+
+<main>
+  <h1>Mülakatta nasıl anlatırım?</h1>
+  <p class="lead">Kavramları bilmek yetmez; sırayla, kısa ve gerekçeli anlatmak gerekiyor. Bu sayfa anlatımın iskeleti.</p>
+
+  <nav class="toc"><b>Bu sayfada</b>
+    <ol>
+      <li><a href="#kalip">4 adımlı kalıp</a></li>
+      <li><a href="#plan">60 dakikalık oyun planı</a></li>
+      <li><a href="#cumleler">Hazır cümleler</a></li>
+      <li><a href="#bilmiyorum">Bilmediğin bir şey sorulursa</a></li>
+      <li><a href="#hatalar">Puan kaybettiren hatalar</a></li>
+      <li><a href="#tuzaklar">Hafızanı düzelt</a></li>
+    </ol>
+  </nav>
+
+  <h2 id="kalip">4 adımlı kalıp</h2>
+  <p>Bir parçayı çizerken her seferinde şu dört şeyi söyle:</p>
+  <ol>
+    <li><b>Ne:</b> "This is a queue."</li>
+    <li><b>Neden:</b> "…so accepting work is decoupled from doing it."</li>
+    <li><b>Neyi riske atıyor:</b> "Delivery is at-least-once…"</li>
+    <li><b>Nasıl kapatıyorum:</b> "…so consumers are idempotent."</li>
+  </ol>
+  <p>Örnek:</p>
+  <div class="say">I'll put an LLM gateway here. Models are slow, expensive and rate-limited, and one tenant could burn the whole quota. So the gateway enforces per-tenant budgets and falls back to another model if the provider is down.</div>
+
+  <h2 id="plan">60 dakikalık oyun planı</h2>
+  <p class="small muted">Süre davette yazmıyorsa başta sor; 60 dakika bir prova varsayımıdır.</p>
+  <div class="table-wrap"><table>
+    <tr><th>Dakika</th><th>Adım</th><th>Ne yap</th></tr>
+    <tr><td>0-5</td><td>Tanışma</td><td>Kısa tanıtım. Format soruları: süre, tasarım/kod oranı, AI asistan izni, hangi dil.</td></tr>
+    <tr><td>5-12</td><td><b>Gereksinimler</b></td><td>Kullanıcılar kim? Ana 3-4 use case. Fonksiyonel ve fonksiyonel olmayan gereksinimler (latency, availability, tutarlılık, güvenlik, multi-tenant). Kapsam dışını söyle. Kısa bir hesap.</td></tr>
+    <tr><td>12-25</td><td><b>API sözleşmesi</b></td><td>Kaynaklar → endpoint tablosu → 1-2 tam örnek → hata modeli → auth → sayfalama → idempotency → uzun süren işler (202).</td></tr>
+    <tr><td>25-32</td><td>Veri modeli</td><td>Postgres tabloları, unique constraint'ler, index'ler, her yerde <code>tenant_id</code>.</td></tr>
+    <tr><td>32-45</td><td><b>Mimari</b></td><td>Önce <a href="knowledge-sync/cozum.html#diyagram">basit v1</a> (1. ve 2. aşama), sonra okuma ve yazma yolunu ayrı anlat.</td></tr>
+    <tr><td>45-55</td><td>Derin dalış</td><td>Mülakatçının seçtiği konu: ölçek, hata senaryoları, büyük tenant, deploy/rollback, gözlemlenebilirlik, güvenlik.</td></tr>
+    <tr><td>55-60</td><td>Kapanış</td><td>"If I had more time I'd…" ve 2 soru.</td></tr>
+  </table></div>
+
+  <h2 id="cumleler">Hazır cümleler</h2>
+  <h3>Başlarken</h3>
+  <div class="say">Before I jump into the design, I'd like to clarify the scope and a few requirements.</div>
+  <div class="say">Who are the consumers of this API: our own frontend, third-party integrations, or other internal services?</div>
+  <div class="say">Out of scope for now: billing and the admin UI. I'll mention them at the end if time allows.</div>
+  <h3>API aşaması</h3>
+  <div class="say">Let me start with the resources and the contract, because the contract is the hardest thing to change later.</div>
+  <div class="say">This operation can take minutes, so instead of holding the request open I'll return 202 with an operation resource the client can poll.</div>
+  <h3>Mimari ve trade-off</h3>
+  <div class="say">This is the simplest version that works. Where would you like me to go deeper?</div>
+  <div class="say">The trade-off here is eventual consistency: the user sees the change within a few seconds instead of immediately. For content that's acceptable, but not for permissions.</div>
+  <div class="say">I'd start with Postgres because the team already runs it well; I'd only move to something else when we hit a concrete limit.</div>
+  <h3>Takıldığında</h3>
+  <div class="say">Let me trace one request and find the first place where state changes.</div>
+  <div class="say">I see two options here. Let me compare them quickly and then pick one.</div>
+  <h3>Bitirirken</h3>
+  <div class="say">To summarize: the contract, the data model, the async pipeline, and how we'd operate it. The biggest risk I see is X, and I'd mitigate it with Y.</div>
+
+  <h2 id="bilmiyorum">Bilmediğin bir şey sorulursa</h2>
+  <div class="say">I haven't run that specific piece in production, but the way I'd reason about it is…</div>
+  <p>Sonra <a href="#kalip">4 adımlı kalıba</a> dön. Dürüstlük ve akıl yürütme, ezber tanımdan daha değerli.</p>
+
+  <h2 id="hatalar">Puan kaybettiren hatalar</h2>
+  <ol>
+    <li>Gereksinim sormadan kutu çizmeye başlamak.</li>
+    <li>API'yi atlayıp direkt mimariye geçmek (turun adı "API Development").</li>
+    <li>Hata modelini, sayfalamayı, idempotency'yi unutmak.</li>
+    <li>"Kafka/Cassandra koyalım" deyip <b>neden</b> sorusuna cevap verememek.</li>
+    <li>Multi-tenancy'yi (tenant izolasyonu) unutmak.</li>
+    <li>Operasyon tarafını unutmak: deploy, rollback, SLO, alert, on-call.</li>
+    <li>İlk tasarımı fazla karmaşık yapmak. Önce basit v1, karmaşıklık sorulunca.</li>
+    <li>Sessiz kalmak ya da ipucuna savunmaya geçmek.</li>
+  </ol>
+
+  <h2 id="tuzaklar">Hafızanı düzelt: 8 yanlış refleks</h2>
+  <ol>
+    <li>Kuyruk sıralaması = sahiplik/kilit <b>değil</b>.</li>
+    <li>JWT doğrulaması = anında iptal <b>değil</b>. Kısa ömürlü token, iptalin token süresi kadar gecikebileceğini kabul etmektir.</li>
+    <li>İçerik değişmedi = izin değişmedi <b>değil</b>.</li>
+    <li>202 = kalıcı kabul. Kaydetmediğin işi kabul etme.</li>
+    <li>Timeout sonrası dış yan etki <b>belirsiz</b> olabilir.</li>
+    <li>Mülakat aracında bir özelliğin görünmesi = kullanma izni <b>değil</b>. Sor.</li>
+    <li>Mutex sadece tek process'i korur; birden çok replika = DB transaction / atomik update.</li>
+    <li>Streaming = dayanıklı yürütme <b>değil</b>.</li>
+  </ol>
+  <p>Daha fazlası için baskı paketindeki "Senaryolarda ince noktalar" sayfası: <a href="paket/ai-company.html">AI Company paketi</a>.</p>
+</main>
+<footer>Kişisel çalışma notları. Senaryolar alıştırma amaçlıdır; şirket adları anonimleştirilmiştir.</footer>
+
+</body>
+</html>

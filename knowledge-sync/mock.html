@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Knowledge Sync · Mock</title>
+<link rel="stylesheet" href="../assets/site.css?v=11">
+<style>
+.phase { font-size: 13px; color: var(--text-3); text-transform: none; letter-spacing: .2px; margin: 26px 0 8px; display: flex; gap: 10px; align-items: center; }
+.phase::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
+.turn { display: grid; grid-template-columns: 92px 1fr; gap: 10px; margin: 10px 0; }
+.who { font-size: 13px; font-weight: 600; padding-top: 9px; text-align: right; }
+.who.i { color: #9FE1CB; }
+.who.me { color: #CECBF6; }
+.bubble { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 8px 12px; }
+.turn.me .bubble { background: var(--say-bg); border-color: #6f69a8; }
+.bubble pre { margin: 6px 0 2px; font-size: 13px; }
+details.tip { margin: 6px 0 12px 102px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 12px; font-size: 14.5px; }
+details.tip summary { cursor: pointer; color: var(--text-2); }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+body.hide-me .turn.me .bubble > * { visibility: hidden; }
+body.hide-me .turn.me .bubble { background: repeating-linear-gradient(45deg, var(--surface), var(--surface) 8px, var(--surface-2) 8px, var(--surface-2) 16px); }
+@media (max-width: 600px) { .turn { grid-template-columns: 1fr; gap: 2px; } .who { text-align: left; padding-top: 0; } details.tip { margin-left: 0; } }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="topbar-inner">
+  <a class="brand" href="../index.html">Mülakat Hazırlığı</a>
+  <nav>
+    <a href="../index.html">Ana sayfa</a>
+    <a class="active" href="kapsam.html">Knowledge Sync</a>
+    <a href="../agent-tasks/kapsam.html">Agent Tasks</a>
+    <a href="../deployment-api/kapsam.html">Deployment API</a>
+  </nav>
+</div>
+<div class="subnav"><nav>
+    <a href="kapsam.html">1 · Kapsam</a>
+    <a href="api.html">2 · API</a>
+    <a href="cozum.html">3 · Minimum çözüm</a>
+    <a href="hata.html">4 · Hata ve güvenlik</a>
+    <a href="olcek.html">5 · Ölçek ve follow-up</a>
+    <a href="sozluk.html">Sözlük</a>
+    <a class="active" href="mock.html">Mock</a>
+</nav></div></header>
+
+<main>
+<h1>Knowledge Sync · Mock mülakat</h1>
+<p class="lead">Gerçekçi, kısaltılmış bir <i>API Development &amp; Solutions Design</i> görüşmesi. Interviewer doğal İngilizce konuşuyor; aday (sen) basit B2 İngilizcesiyle. Amaç <b>sıra, gerekçe ve sakinlik</b>.</p>
+<div class="note small">
+    <b>Nasıl çalışılır?</b>
+    <ol style="margin:4px 0 0">
+      <li>Bir kez baştan sona sesli oku; iki rolü de sen oku.</li>
+      <li>"Adayın cevaplarını gizle"ye bas. Interviewer'ı oku, cevabı <b>kendi cümlelerinle</b> sesli söyle, sonra gizlemeyi kapatıp karşılaştır.</li>
+      <li>Telefonla kendini kaydet. Cevaplar 20-40 saniyeyi geçiyorsa kısalt.</li>
+    </ol>
+    Yeşil notlar (▸ Neden işe yarıyor?) Türkçe koçluk notlarıdır.
+  </div>
+  <div class="controls">
+<button class="btn" type="button" id="toggle">Adayın cevaplarını gizle</button>
+<button class="btn" type="button" id="tips">Koçluk notlarını aç</button>
+</div>
+  <div class="phase">00:00 · Tanışma ve format</div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">Hi, thanks for joining! I'm Alex, I'm on the platform team. How are you doing today?</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">Hi Alex, I'm good, thank you. A bit excited, but good.</div></div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">Great. Could you give me a quick intro about yourself?</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">Sure. I am backend and platform engineer, around ten years experience. Mostly I work with Go, Kubernetes and cloud. In last years I worked on an identity platform and on a payment backend, so I care a lot about correctness and reliability.</div></div>
+  <details class="tip"><summary>Neden işe yarıyor?</summary>20 saniye, üç bilgi: rol, araçlar, neyi önemsediğin. Şirket adı, sayı, hikâye yok; onlar sorulursa gelir.</details>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">Nice. So today is about API design and solutions design. We have around 50 minutes.</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">Okay. Before we start, can I ask how you want to split the time between design and coding? And which language I can use?</div></div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">Mostly design. If there's time we might write a bit of code; any language is fine.</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">Perfect, then I will use Go if we come to the code.</div></div>
+  <details class="tip"><summary>Neden işe yarıyor?</summary>Formatı en başta netleştirmek, zamanı doğru bölmeni sağlar. AI asistan araçta görünüyorsa izni de burada sorabilirsin.</details>
+
+  <div class="phase">03:00 · Problem</div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">Here's the problem. Our customers want to connect their company tools, like Google Drive and Slack, so our AI agent can answer questions using their documents. Design the API and the backend that keeps these sources in sync and makes the content searchable.</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">Okay, nice problem. I like to ask some questions first, if it's okay.</div></div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">Sure, go ahead.</div></div>
+
+  <div class="phase">04:00 · Netleştirme soruları</div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">Who is using this API? Only admins from the UI, or also other services?</div></div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">Mainly admins through our UI. And the agent calls search.</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">How many customers, and how big is the biggest one? Like, number of documents.</div></div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">A few hundred enterprise customers. The biggest has around five million documents.</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">And how fresh it must be? If someone change a document, how fast we need to see it in search?</div></div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">Within ten minutes is fine.</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">One more, and I think it is the most important: permissions. If a user can not see a document in Drive, he should not see it in our search too, right?</div></div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">Correct, that's a hard requirement.</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">And if someone lose the access, how fast we must remove it?</div></div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">Good question. Faster than content. A few minutes.</div></div>
+  <details class="tip"><summary>Neden işe yarıyor?</summary>Dört soru: kullanıcı, ölçek, tazelik, izin. İzin sorusu bu problemin kalbi; "most important" demen olgunluk gösterir. Soru sayısını 4-5'te tut.</details>
+
+  <div class="phase">07:00 · Özet ve gereksinimler</div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">Okay, let me summarize. Admin connects a source, starts a sync and sees the progress. Users search only what they can see. Content should be fresh in ten minutes, permission changes in few minutes, no data leak between customers, and a big customer should not block the small ones. I think the hard part is not QPS. It's permissions, the limits of source APIs, and fairness between customers.</div></div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">Sounds right. Let's look at the API.</div></div>
+  <details class="tip"><summary>Neden işe yarıyor?</summary>Özet, mülakatçıya "doğru problemi çözüyorum" kontrolü verir. Son cümle ("hard part is not QPS") kıdem sinyalidir.</details>
+
+  <div class="phase">09:00 · API sözleşmesi</div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">I start with the resources: source, sync, and documents.
+<pre>POST   /v1/sources              → 201
+POST   /v1/sources/{id}/syncs   → 202 + Location
+GET    /v1/syncs/{id}              → status, progress
+POST   /v1/search                  → results + source links
+DELETE /v1/sources/{id}         → 202 (cleanup is async)</pre>
+  Sync can take hours, so it returns 202 with the sync id. Status is queued, running, succeeded or failed.</div></div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">Why 202? Why not just do the sync inside the request?</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">Because it takes long time. A HTTP request can not wait hours. So the API only saves the job in the database and returns 202. The worker does the real work, and the client can poll the status.</div></div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">What if the admin clicks "sync" twice, or the client retries after a timeout?</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">Every POST has an Idempotency-Key header. If the same key and same body comes again, I return the first response. If same key but different body, I return 409. Also I have a unique index in Postgres, only one active sync per source. So even two different requests can not start two syncs.</div></div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">And how do you know which customer the request belongs to?</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">From the token. The gateway checks the JWT, and the tenant comes from there, never from the request body. And every table has tenant_id.</div></div>
+  <details class="tip"><summary>Neden işe yarıyor?</summary>Retry sorusuna iki katmanlı cevap: uygulamada idempotency key, veritabanında unique index. "Never from the body" cümlesi güvenlik farkındalığı gösterir.</details>
+
+  <div class="phase">17:00 · Basit v1 mimari</div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">Let's talk about the architecture.</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">I will draw first a simple version. Admin goes to the gateway, for JWT and rate limit, then to the Knowledge Sources API. The API is stateless. It writes to Postgres: in the same transaction, the sync row and a pending_events row. An event publisher sends it to a Kafka topic, and a sync worker takes it. This is the simplest version that works. Where you want me to go deeper?</div></div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">Why Kafka already in the first version? Wouldn't a table in Postgres be enough?</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">For only the sync jobs, yes, a Postgres table is enough. But this is a pipeline of events: sync jobs now, and later the change events from webhooks and the permission changes go the same way. One big new tenant can make hundreds of thousands of document events in few hours, and I don't want this load on the main Postgres that serves the API. Kafka keeps them, spreads them to the workers, and with source id as key, one source is processed in order. We can also replay a topic if a consumer had a bug.</div></div>
+  <details class="tip"><summary>Neden işe yarıyor?</summary>Önce dürüstçe "sadece sync işleri için Postgres yeterdi" de, sonra bu sistemin bir olay hattı olduğunu söyle. Kararı ihtiyaca bağlıyorsun; ezberden "Kafka koyalım" demiyorsun. <a href="cozum.html#neden-kafka">Ayrıntı</a></details>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">Why the pending_events table?</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">If I write to the database and then publish to the queue, and the service crash between them, the job is saved but nobody does it. With pending_events both are in one transaction. The event publisher can publish twice, but the worker is idempotent, so it's fine.</div></div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">What does the worker actually do?</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">It calls the source API with a cursor, like "give me the changes since last time", page by page. After each page I save the cursor, so after a crash it continues from there. For each document I check the hash. If content is same, I skip it. Then I upsert the document and its ACL into Postgres.</div></div>
+  <details class="tip"><summary>Neden işe yarıyor?</summary>Önce 5 kutuluk v1, sonra "nereye derinleşeyim?" sorusu. Kontrolü mülakatçıya vermek, fazla karmaşık tasarım tuzağından korur. Bkz. <a href="cozum.html#diyagram">Diyagram A, aşama 1-2</a>.</details>
+
+  <div class="phase">24:00 · Hata senaryoları</div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">What happens if the worker crashes in the middle of a page?</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">Then it doesn't commit the offset, so Kafka gives the message again to the worker that takes over the partition. Because the upsert is idempotent, processing the same page again gives the same result. The cursor was not moved yet, so nothing is lost.</div></div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">Okay. Now our biggest customer, five million documents, connects on a Monday morning. What happens?</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">Hmm, this is the noisy neighbor problem. If everything is in one queue, small customers wait behind. So I make two lanes: one for the initial import, and one for live changes. And I limit how many workers one customer can use at same time. The source API also has quota, so I keep a token bucket in Redis per customer and per source.</div></div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">And if Google starts returning 429s?</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">I respect the Retry-After and put the message back with a delay, not let the worker sleep. And a circuit breaker per source, so if Slack is down, Drive sync still works.</div></div>
+  <details class="tip"><summary>Neden işe yarıyor?</summary>"Hmm" ile düşünmek sorun değil. Problemi adlandırmak ("noisy neighbor") ve iki somut çözüm (iki şerit, tenant limiti) vermek yeterli.</details>
+
+  <div class="phase">31:00 · İzinler</div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">Let's go back to permissions. A user is removed from a group in Drive. Walk me through it.</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">For me this is the most important path. Permission changes go to a separate priority queue, so they don't wait behind the big import. The ACL worker updates the ACL table; no need to embed again. In search, I filter by permission first and rank after. If I don't know the permission, I don't show the document. Fail closed.</div></div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">Why filter first and not after ranking?</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">If I filter after, maybe the top ten results are all not allowed, and I return nothing. Or worse, there is a risk to leak something in the snippets. Filtering first is safer.</div></div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">Makes sense. How do you know which groups the user is in?</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">From the identity provider or the source, and I cache it in Redis for a short time, like five minutes. That five minutes is the trade-off. If the business wants faster, I make the TTL smaller, or check directly for sensitive documents.</div></div>
+  <details class="tip"><summary>Neden işe yarıyor?</summary>Trade-off'u kendin söylemek ("that five minutes is the trade-off") en güçlü kıdem sinyallerinden biri. Mülakatçının yakalamasını bekleme.</details>
+
+  <div class="phase">39:00 · Production</div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">How would you run this in production?</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">On Kubernetes. The API scales with HPA, and the workers scale with the queue backlog, with KEDA. For SLOs I would say: API availability 99.9, freshness ten minutes at p95, permission removal under five minutes. I alert on the age of the oldest message, the DLQ rate and the 429 rate per source, not on CPU. And I deploy with canary, so if the error rate goes up, we roll back.</div></div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">If you had more time, what would you add?</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">Two things. Embeddings for semantic search, but only when the content changes, because it cost money. And a reconciliation job that compares ACLs with the source once a day, because webhooks can get lost.</div></div>
+  <details class="tip"><summary>Neden işe yarıyor?</summary>Infra rolü için operasyon kısmı senin güçlü alanın: semptoma göre alarm (en eski mesajın yaşı), canary, SLO. Kısa ve somut tut.</details>
+
+  <div class="phase">45:00 · Senin soruların</div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">Great, we're almost at time. Do you have any questions for me?</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">Yes, two questions. What is the biggest reliability problem in the platform right now? And how does the infra team work with feature teams, is it more building tools, or more hands-on support?</div></div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">Good questions. Right now it's mostly dependencies on model providers and knowledge sync at scale. And it's a mix: we build the paved road, but we also pair with teams on launches.</div></div>
+  <div class="turn me"><div class="who me">Sen</div><div class="bubble">That sounds interesting, thank you. It was a nice discussion.</div></div>
+  <div class="turn i"><div class="who i">Interviewer</div><div class="bubble">Thank you too. Our recruiter will be in touch about next steps.</div></div>
+  <details class="tip"><summary>Neden işe yarıyor?</summary>İki soru yeter. Rolün gerçek işini soran sorular ilgi gösterir. Bitirirken "What are the next steps?" sorusunu recruiter'a sakla.</details>
+
+  
+<h2 id="gramer">Küçük gramer notları</h2>
+<p class="small muted">Bu hatalar anlaşılmayı bozmaz; mülakatta dert etme. Ama düzeltmek istersen:</p>
+<div class="table-wrap"><table class="small"><tr><th>Mock'taki</th><th>Doğrusu</th></tr><tr><td>I am backend and platform engineer, around ten years experience</td><td>I'm a backend and platform engineer with around ten years of experience</td></tr><tr><td>he should not see it in our search too</td><td>they shouldn't see it in our search either</td></tr><tr><td>I like to ask some questions first</td><td>I'd like to ask a few questions first</td></tr><tr><td>A HTTP request can not wait hours</td><td>An HTTP request can't wait for hours</td></tr><tr><td>Where you want me to go deeper?</td><td>Where would you like me to go deeper?</td></tr><tr><td>the service crash between them</td><td>the service crashes between them</td></tr><tr><td>because it cost money</td><td>because it costs money</td></tr><tr><td>in few hours</td><td>in a few hours</td></tr></table></div>
+<nav class="pager"><a href="sozluk.html">← Sözlük</a></nav>
+</main>
+<footer>Kişisel çalışma notları. Senaryolar alıştırma amaçlıdır; şirket adları anonimleştirilmiştir.</footer>
+<script>
+(function () {
+  const t = document.getElementById('toggle');
+  t.addEventListener('click', () => {
+    const on = document.body.classList.toggle('hide-me');
+    t.textContent = on ? 'Adayın cevaplarını göster' : 'Adayın cevaplarını gizle';
+  });
+  const tips = document.getElementById('tips');
+  tips.addEventListener('click', () => {
+    const all = document.querySelectorAll('details.tip');
+    const open = !Array.from(all).every(d => d.open);
+    all.forEach(d => { d.open = open; });
+    tips.textContent = open ? 'Koçluk notlarını kapat' : 'Koçluk notlarını aç';
+  });
+})();
+</script>
+</body>
+</html>

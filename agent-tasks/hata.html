@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Tasks · Hata ve güvenlik</title>
+<link rel="stylesheet" href="../assets/site.css?v=11">
+</head>
+<body>
+<header class="topbar"><div class="topbar-inner">
+  <a class="brand" href="../index.html">Mülakat Hazırlığı</a>
+  <nav>
+    <a href="../index.html">Ana sayfa</a>
+    <a href="../knowledge-sync/kapsam.html">Knowledge Sync</a>
+    <a class="active" href="kapsam.html">Agent Tasks</a>
+    <a href="../deployment-api/kapsam.html">Deployment API</a>
+  </nav>
+</div>
+<div class="subnav"><nav>
+    <a href="kapsam.html">1 · Kapsam</a>
+    <a href="api.html">2 · API</a>
+    <a href="cozum.html">3 · Minimum çözüm</a>
+    <a class="active" href="hata.html">4 · Hata ve güvenlik</a>
+    <a href="olcek.html">5 · Ölçek ve follow-up</a>
+    <a href="sozluk.html">Sözlük</a>
+    <a href="mock.html">Mock</a>
+</nav></div></header>
+
+<main class="wide">
+<h1>Agent Tasks · 4. Hata ve güvenlik</h1>
+<div class="step-hint"><b>Playbook 4/5 · Hata ve güvenlik.</b> Ne yaparsın: retry, eşzamanlılık, çökme, yetki, silme. Her cevap: karar → gerekçe → bedel. Gösterdiğin: sistemin güvenilir olduğunu.</div>
+<p>Knowledge Sync'teki sorunların hepsi burada da var (202'den önce ne kaydedilir, tekrar, eşzamanlılık, yetki, çökme). Üstüne bu sisteme özgü üç tane geliyor: <b>dış dünyada yan etki</b> (tool'lar), <b>iptal</b> ve <b>prompt injection</b>.</p>
+<h2 id="kararlar">Karar soruları</h2>
+<p class="small muted">Her cevap: <b>karar → gerekçe → bedel veya alternatif</b>.</p>
+<div class="table-wrap"><table><tr><th>Soru</th><th>Karar</th><th>Gerekçe</th><th>Bedel / alternatif</th></tr><tr id="a1"><td><b>What must be saved before returning 202?</b></td><td><code>tasks</code> satırı ('queued'), kullanıcının mesajı ve <code>pending_events</code> tek transaction'da.</td><td>202 "task kaybolmayacak" sözüdür; kullanıcının mesajı da konuşma geçmişinin parçası.</td><td>Her istekte DB yazımı. DB yoksa 503 + Retry-After.</td></tr><tr id="a2"><td><b>What happens when the client retries POST /tasks?</b></td><td><code>Idempotency-Key</code> → aynı task (aynı id ve 202). Aynı key + farklı input → 409.</td><td>Mobil ve Slack ağ hatasında tekrar gönderir; iki task iki cevap ve iki kat maliyet demek.</td><td>Key'i ~24 saat saklamak. Key yoksa sadece "tek aktif task" kuralı korur.</td></tr><tr id="a3"><td><b>What if a task is already running in this conversation?</b></td><td>Konuşma başına tek aktif task (partial unique index); yeni istek 409 <code>TASK_ALREADY_ACTIVE</code> + çalışan task'ın id'si.</td><td>Mesaj sırası ve bağlam bozulmasın; iki task aynı geçmişe yazmasın.</td><td>İstemci beklemeli ya da iptal etmeli. Alternatif: konuşma başına sıra (daha karmaşık).</td></tr><tr id="a4"><td><b>Who may start, watch or approve a task?</b></td><td>Tenant ve kullanıcı token'dan. Sadece konuşmanın sahibi başlatır, izler ve onaylar; başkasının task'ı → 404; akış okunmadan önce sahiplik kontrolü.</td><td>Task id tahmin edilirse başkasının cevabı akmamalı; onay, kullanıcı adına bir yan etki demek.</td><td>Her akış bağlantısında yetki kontrolü. Paylaşılan konuşmalar gelirse rol modeli.</td></tr><tr id="a5"><td><b>How does the client see progress or failure?</b></td><td>SSE olay akışı + <code>GET /tasks/{id}</code>; entegrasyonlara webhook. Hata da bir olay: <code>task.failed</code> + kod. <a href="cozum.html#canli">Ayrıntı →</a></td><td>Kullanıcı ekranda bekliyor ve cevabı akarken görmek istiyor.</td><td>Uzun açık bağlantılar (pod başına binlerce); Redis'e bağımlılık.</td></tr><tr id="a6"><td><b>What happens on cancel?</b></td><td><code>:cancel</code> → 202; worker her adım arasında iptali kontrol eder, süren model çağrısı kesilir. Zaten çalışmış tool çağrıları geri alınmaz, sonuçta listelenir. Tekrar çağrı → 200 + mevcut durum.</td><td>Dış dünyadaki yan etkiyi geri alamayız; bunu açıkça söylemek gerek.</td><td>İptal anında değil, bir sonraki adımda etkili olur.</td></tr><tr id="a7"><td><b>What if the worker dies in the middle?</b></td><td>Lease biter, başka worker son checkpoint'ten devam eder; generation numarası eski worker'ın yazmasını reddeder.</td><td>Deploy ve çökme normal; task kaybolmamalı.</td><td>Son checkpoint'ten sonraki adım tekrar çalışabilir; o yüzden tool tarafında <code>side_effect_key</code> şart.</td></tr><tr id="a8"><td><b>What if a write tool times out?</b></td><td>Körlemesine tekrar yok: <code>side_effect_key</code> ile dış sisteme sor ("bu key'le ticket var mı?") ya da kullanıcıya sor, sonra karar ver.</td><td>Timeout "olmadı" değil, "bilmiyorum" demek.</td><td>Her yazan tool için bir kontrol yolu; desteklemeyen sistemde kullanıcıya sormak.</td></tr><tr id="a9"><td><b>How do you stop prompt injection and data leaks?</b></td><td>Tool çıktısı güvenilmeyen veri, talimat değil; tool'lar kullanıcının kendi yetkisiyle çalışır; yazan aksiyon parametreye bağlı onay ister; yetki kontrolü prompt'ta değil tool executor'da.</td><td>Model ikna edilebilir; yetki sınırı kodda olmalı.</td><td>Onay adımı kullanıcıyı biraz yavaşlatır.</td></tr><tr id="a10"><td><b>How do we know it's healthy?</b></td><td>Model hariç ilk olay süresi (p95), kuyruk bekleme süresi, task başarı oranı, tool hata oranı, tenant başına maliyet; sağlayıcı hatası ayrı izlenir.</td><td>"Sorun bizde mi, sağlayıcıda mı?" ayrımı.</td><td>Task id'yi metrik etiketi yapma (kardinalite); detay trace'te.</td></tr></table></div>
+<h2 id="idem-fark">Task idempotency ile tool idempotency farkı</h2>
+<p>İkisi de "aynı şey iki kez olmasın" der, ama farklı tekrarlara karşı korur ve garantileri farklıdır.</p>
+<div class="table-wrap"><table>
+<tr><th></th><th>Task idempotency</th><th>Tool idempotency</th></tr>
+<tr><td><b>Neyi korur?</b></td><td>Aynı task'ın iki kez oluşturulmasını.</td><td>Aynı yan etkinin (ticket, e-posta) dış sistemde iki kez olmasını.</td></tr>
+<tr><td><b>Tekrar nereden gelir?</b></td><td>İstemciden: ağ hatasında <code>POST</code>'u tekrar gönderir.</td><td>Bizden: worker çöker ve devralan aynı adımı tekrar çalıştırır; timeout sonrası retry.</td></tr>
+<tr><td><b>Anahtar</b></td><td>İstemcinin gönderdiği <code>Idempotency-Key</code>.</td><td>Bizim ürettiğimiz <code>side_effect_key = task_id + tool_call_id</code>.</td></tr>
+<tr><td><b>Nerede kontrol edilir?</b></td><td>Kendi API'mizde: Postgres'te unique index.</td><td>Önce kendi <code>tool_calls</code> tablomuzda (started / done), sonra dış sistemde (destekliyorsa idempotency key olarak geçilir).</td></tr>
+<tr><td><b>Garanti</b></td><td><b>Tam:</b> kendi veritabanımız.</td><td><b>Kısmi:</b> dış sistem desteklemiyorsa timeout sonrası "oldu mu?" bilinemez; kontrol et ya da kullanıcıya sor.</td></tr>
+<tr><td><b>Tekrar gelince</b></td><td>Aynı task id ve aynı 202 döner.</td><td>Tool tekrar çağrılmaz; kayıtlı sonuç kullanılır.</td></tr>
+</table></div>
+<div class="say">Task idempotency protects us from client retries, and it's easy because it's our own database. Tool idempotency protects the outside world from our retries, and it's harder: if the external API doesn't support an idempotency key, after a timeout I can't know whether the action happened, so I check or ask the user instead of retrying blindly.</div>
+<h2 id="tenant">Multi-tenancy</h2>
+<p>Bu sisteme özgü: Redis key'leri tenant prefix'li (<code>t:{tenant}:task:…</code>), akış okunmadan önce sahiplik kontrolü, LLM gateway'de tenant başına bütçe, prompt cache tenant'lar arasında paylaşılmaz. Genel katmanlar: <a href="../ortak.html#tenant">Ortak konular → multi-tenancy</a>.</p>
+<nav class="pager"><a href="cozum.html">← 3 · Minimum çözüm</a><a href="olcek.html">5 · Ölçek ve follow-up →</a></nav>
+</main>
+<footer>Kişisel çalışma notları. Senaryolar alıştırma amaçlıdır; şirket adları anonimleştirilmiştir.</footer>
+
+</body>
+</html>

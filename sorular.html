@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Genel takip soruları</title>
+<link rel="stylesheet" href="assets/site.css?v=11">
+<style>
+details.qa { padding: 10px 16px; }
+details.qa summary { cursor: pointer; font-size: 16.5px; }
+details.qa[open] summary { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="topbar-inner">
+  <a class="brand" href="index.html">Mülakat Hazırlığı</a>
+  <nav>
+    <a class="active" href="index.html">Ana sayfa</a>
+    <a href="knowledge-sync/kapsam.html">Knowledge Sync</a>
+    <a href="agent-tasks/kapsam.html">Agent Tasks</a>
+    <a href="deployment-api/kapsam.html">Deployment API</a>
+  </nav>
+</div>
+<div class="subnav"><nav>
+    <a href="index.html">Playbook</a>
+    <a href="plan.html">Bugünün planı</a>
+    <a href="anlatim.html">Nasıl anlatırım?</a>
+    <a class="active" href="sorular.html">Genel takip soruları</a>
+    <a href="ortak.html">Ortak konular</a>
+    <a href="index.html#paket">Baskı paketi</a>
+</nav></div></header>
+
+<main>
+  <h1>Genel takip soruları</h1>
+  <p class="lead">Mülakatçılar senaryodan bağımsız bu tür sorularla derinleşir. Her soru için Türkçe ana fikir ve 2-3 cümlelik basit İngilizce cevap.</p>
+  <div class="note small"><b>Nasıl çalışılır?</b> Soruyu oku, açmadan önce 20 saniyede kendi cevabını sesli söyle, sonra aç ve karşılaştır. Cevapları ezberleme; ana fikri ve bir örneği hatırla.</div>
+  <div class="controls" style="display:flex;gap:8px;margin:12px 0">
+    <button class="btn" type="button" id="openall">Hepsini aç</button>
+    <button class="btn" type="button" id="shuffle">Rastgele bir soru</button>
+  </div>
+  <nav class="toc"><b>Konular</b><ol><li><a href="#g1">API</a></li><li><a href="#g2">Veri ve ölçek</a></li><li><a href="#g3">Güvenilirlik ve operasyon</a></li><li><a href="#g4">Güvenlik</a></li><li><a href="#g5">AI ve maliyet</a></li></ol></nav>
+  <h2 id="g1">API</h2>
+  <details class="term qa"><summary><b>1.</b> How do you version this API?</summary>
+    <p class="small muted" style="margin:8px 0 4px">Ana fikir: Versiyon URL&#x27;de; ek alan kırmaz, silmek/anlam değiştirmek kırar.</p>
+    <div class="say">I put the major version in the URL, like /v1. Adding a new field is safe, but removing a field or changing its meaning is a breaking change, so that goes to /v2. I run both versions for a while, send deprecation headers, and check usage before I remove the old one.</div>
+  </details>
+  <details class="term qa"><summary><b>2.</b> How do you paginate large lists?</summary>
+    <p class="small muted" style="margin:8px 0 4px">Ana fikir: Offset değil cursor.</p>
+    <div class="say">With a cursor, not offset. The cursor is an opaque token with the last sort key, so it stays fast on big tables and doesn&#x27;t skip items when new rows are added. And I always set a maximum page size.</div>
+    <p class="small" style="margin:6px 0 0"><a href="ortak.html#cursor">Cursor ve offset farkı, örnek SQL ile →</a></p>
+  </details>
+  <details class="term qa"><summary><b>3.</b> How do you handle errors in the API?</summary>
+    <p class="small muted" style="margin:8px 0 4px">Ana fikir: Tek hata formatı, makine için sabit kod, request id.</p>
+    <div class="say">One error format for the whole API, with a stable machine-readable code, a human message and a request id that matches our logs. 4xx means the client can fix it, 5xx or 503 with Retry-After means it can try again later.</div>
+  </details>
+  <h2 id="g2">Veri ve ölçek</h2>
+  <details class="term qa"><summary><b>4.</b> Why Postgres and not a vector database from day one?</summary>
+    <p class="small muted" style="margin:8px 0 4px">Ana fikir: Bilinen tek sistem; gerçek bir sınır görünce taşı.</p>
+    <div class="say">The team already runs Postgres well, and one system is easier to operate. With pgvector it&#x27;s fine for the start. When a big tenant makes the index too large or too slow, I move that part to a dedicated vector store, but I want a real reason first.</div>
+  </details>
+  <details class="term qa"><summary><b>5.</b> Why Kafka here?</summary>
+    <p class="small muted" style="margin:8px 0 4px">Ana fikir: Key başına sıra, replay, yüksek hacim; bedeli işletme ve retry/DLT'yi kendin kurmak. <a href="knowledge-sync/sozluk.html#kafka">Sözlük →</a></p>
+    <div class="say">Kafka gives us ordering per key, so all changes for one source or task stay in order, and we can replay a topic if a consumer had a bug. The cost is operations and that retries and dead-letter topics are our job, so I'd use a managed Kafka. For a small team, a simpler managed queue would also work.</div>
+  </details>
+  <details class="term qa"><summary><b>6.</b> One big tenant is slowing everyone down. What do you do?</summary>
+    <p class="small muted" style="margin:8px 0 4px">Ana fikir: Tenant limiti, ayrı şeritler, adil sıralama.</p>
+    <div class="say">That&#x27;s the noisy neighbor problem. I add per-tenant limits on workers and rate, separate lanes for big imports and live traffic, and fair scheduling between tenants. And I measure lag per tenant, so we see it before customers complain.</div>
+  </details>
+  <details class="term qa"><summary><b>7.</b> EU customer data must stay in the EU. What changes?</summary>
+    <p class="small muted" style="margin:8px 0 4px">Ana fikir: Bölge başına hücre, tenant→bölge eşlemesi, modelin de bölgede olması.</p>
+    <div class="say">I deploy one cell per region, with its own database, queue and storage, and map every tenant to a home region. Content never replicates to another region. And the model provider must also be in that region, including the fallback model.</div>
+  </details>
+  <h2 id="g3">Güvenilirlik ve operasyon</h2>
+  <details class="term qa"><summary><b>8.</b> How do you change the database schema without downtime?</summary>
+    <p class="small muted" style="margin:8px 0 4px">Ana fikir: Expand → backfill → contract.</p>
+    <div class="say">Expand, backfill, contract. First I add the new column or table in a backward-compatible way, then backfill in small batches, then switch the code, and only at the end remove the old part. Indexes with CREATE INDEX CONCURRENTLY and a lock timeout on migrations.</div>
+  </details>
+  <details class="term qa"><summary><b>9.</b> The primary database fails over. What do users see?</summary>
+    <p class="small muted" style="margin:8px 0 4px">Ana fikir: 30-60 sn yazma hatası; retry güvenli çünkü idempotent.</p>
+    <div class="say">Around thirty to sixty seconds of write errors. The API returns 503 with Retry-After, workers retry with backoff, and reads can continue from a replica. Because writes are idempotent, the retries are safe.</div>
+  </details>
+  <details class="term qa"><summary><b>10.</b> How do you deploy safely?</summary>
+    <p class="small muted" style="margin:8px 0 4px">Ana fikir: Canary + metriğe bağlı otomatik rollback; deploy ≠ release.</p>
+    <div class="say">Canary first, to a small part of the traffic, and automatic rollback if error rate or latency goes up. Risky features stay behind a feature flag, so deploy and release are two different steps.</div>
+  </details>
+  <details class="term qa"><summary><b>11.</b> What would you monitor first?</summary>
+    <p class="small muted" style="margin:8px 0 4px">Ana fikir: Kullanıcının hissettiği semptomlar; SLO burn rate alarmı.</p>
+    <div class="say">The symptoms users feel: error rate, latency, the age of the oldest message in the queue, and data freshness. I alert on SLO burn rate, not on CPU. CPU is useful for debugging, not for paging someone at night.</div>
+  </details>
+  <details class="term qa"><summary><b>12.</b> The LLM provider is down for an hour. What happens?</summary>
+    <p class="small muted" style="margin:8px 0 4px">Ana fikir: Circuit breaker, fallback, kademeli düşüş.</p>
+    <div class="say">A circuit breaker stops us from hammering it. We fall back to another model if it&#x27;s allowed for the customer&#x27;s region. If nothing works, we degrade: search still returns documents without a generated answer, and async tasks wait in the queue.</div>
+  </details>
+  <details class="term qa"><summary><b>13.</b> How would you test this system?</summary>
+    <p class="small muted" style="margin:8px 0 4px">Ana fikir: Fake&#x27;li unit, contract, gerçek Postgres&#x27;li entegrasyon, worker öldürme.</p>
+    <div class="say">Unit tests with fakes for the storage and the clock, contract tests from the OpenAPI spec, integration tests with a real Postgres in a container, and some chaos tests, like killing a worker in the middle of a sync and checking nothing is lost or duplicated.</div>
+  </details>
+  <h2 id="g4">Güvenlik</h2>
+  <details class="term qa"><summary><b>14.</b> How do you make sure one tenant never sees another tenant&#x27;s data?</summary>
+    <p class="small muted" style="margin:8px 0 4px">Ana fikir: Tenant token&#x27;dan; her yerde tenant_id; RLS ikinci katman; test.</p>
+    <div class="say">The tenant comes from the verified token, never from the request. Every table and every query has tenant_id, and row-level security is a second layer. And we have tests that call with tenant A&#x27;s token for tenant B&#x27;s object and expect a 404.</div>
+  </details>
+  <details class="term qa"><summary><b>15.</b> Tokens are stateless. How do you revoke access quickly?</summary>
+    <p class="small muted" style="margin:8px 0 4px">Ana fikir: Kısa ömür + refresh iptali; kritik işlerde merkezi kontrol.</p>
+    <div class="say">Short-lived access tokens, a few minutes, and we revoke the refresh token on logout or when a user is disabled. So the worst case is the token lifetime. For very sensitive actions I check a central service at that moment. That&#x27;s a trade-off between speed and how fast revocation must be.</div>
+  </details>
+  <details class="term qa"><summary><b>16.</b> How would you design rate limiting?</summary>
+    <p class="small muted" style="margin:8px 0 4px">Ana fikir: Redis token bucket; okuma fail-open, pahalı işler fail-closed.</p>
+    <div class="say">A token bucket in Redis, updated atomically, per API key and per tenant, plus a small local limit in each pod. If Redis is down, I fail open for cheap reads but fail closed for expensive things like LLM calls.</div>
+  </details>
+  <h2 id="g5">AI ve maliyet</h2>
+  <details class="term qa"><summary><b>17.</b> How do you estimate and control LLM cost?</summary>
+    <p class="small muted" style="margin:8px 0 4px">Ana fikir: Task başına token × task sayısı; tenant bütçesi; değişmeyeni işleme.</p>
+    <div class="say">Tokens per task times tasks per day gives the rough number, and in our case the model is the biggest cost, not CPU. I control it with a token budget per tenant, by not re-embedding content that didn&#x27;t change, and by measuring cost per tenant on a dashboard.</div>
+  </details>
+  <details class="term qa"><summary><b>18.</b> How do you deal with prompt injection?</summary>
+    <p class="small muted" style="margin:8px 0 4px">Ana fikir: Çıktı = güvenilmez veri; kullanıcı yetkisi; yazan aksiyona onay.</p>
+    <div class="say">I treat any text from documents or tools as untrusted data, not instructions. Tools run with the user&#x27;s own permissions, so the agent can&#x27;t access more than the user. And actions that write need approval for the exact parameters.</div>
+  </details>
+  <p><a href="plan.html">Bugünün planına dön →</a></p>
+</main>
+<footer>Kişisel çalışma notları. Senaryolar alıştırma amaçlıdır; şirket adları anonimleştirilmiştir.</footer>
+<script>
+(function () {
+  const all = Array.from(document.querySelectorAll('details.qa'));
+  const btn = document.getElementById('openall');
+  btn.addEventListener('click', () => {
+    const open = !all.every(d => d.open);
+    all.forEach(d => { d.open = open; });
+    btn.textContent = open ? 'Hepsini kapat' : 'Hepsini aç';
+  });
+  document.getElementById('shuffle').addEventListener('click', () => {
+    all.forEach(d => { d.open = false; });
+    const d = all[Math.floor(Math.random() * all.length)];
+    d.scrollIntoView({ block: 'center' });
+    d.querySelector('summary').focus();
+  });
+})();
+</script>
+</body>
+</html>

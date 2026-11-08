@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deployment API · Hata ve güvenlik</title>
+<link rel="stylesheet" href="../assets/site.css?v=11">
+</head>
+<body>
+<header class="topbar"><div class="topbar-inner">
+  <a class="brand" href="../index.html">Mülakat Hazırlığı</a>
+  <nav>
+    <a href="../index.html">Ana sayfa</a>
+    <a href="../knowledge-sync/kapsam.html">Knowledge Sync</a>
+    <a href="../agent-tasks/kapsam.html">Agent Tasks</a>
+    <a class="active" href="kapsam.html">Deployment API</a>
+  </nav>
+</div>
+<div class="subnav"><nav>
+    <a href="kapsam.html">1 · Kapsam</a>
+    <a href="api.html">2 · API</a>
+    <a href="cozum.html">3 · Minimum çözüm</a>
+    <a class="active" href="hata.html">4 · Hata ve güvenlik</a>
+    <a href="olcek.html">5 · Ölçek ve follow-up</a>
+    <a href="sozluk.html">Sözlük</a>
+    <a href="mock.html">Mock</a>
+</nav></div></header>
+
+<main class="wide">
+<h1>Deployment API · 4. Hata ve güvenlik</h1>
+<div class="step-hint"><b>Playbook 4/5 · Hata ve güvenlik.</b> Ne yaparsın: retry, eşzamanlılık, çökme, yetki, silme. Her cevap: karar → gerekçe → bedel. Gösterdiğin: sistemin güvenilir olduğunu.</div>
+<h2 id="kararlar">Karar soruları</h2>
+<p class="small muted">Her cevap: <b>karar → gerekçe → bedel veya alternatif</b>. Aynı sorular diğer iki sistemde de var; cevapları farklı.</p>
+<div class="table-wrap"><table><tr><th>Soru</th><th>Karar</th><th>Gerekçe</th><th>Bedel / alternatif</th></tr><tr id="d1"><td><b>What must be saved before returning 202?</b></td><td><code>deployments</code> satırı ('pending', idempotency key ile) commit edilir. Ayrı bir <code>pending_events</code> gerekmez: kuyruk Postgres'in kendisi, satır yazıldığı an iş kuyruktadır.</td><td>202 "deploy kaybolmayacak" sözüdür.</td><td>DB yoksa 503 + Retry-After; CI tekrar dener.</td></tr><tr id="d2"><td><b>What happens when CI retries?</b></td><td><code>UNIQUE (service_id, idempotency_key)</code> → aynı deployment döner.</td><td>CI job'ları yeniden denenir; iki deploy başlamamalı.</td><td>CI key üretmeli (ör. pipeline run id). Key yoksa sadece "tek aktif deploy" korur.</td></tr><tr id="d3"><td><b>What if two deploys target the same service and environment?</b></td><td>Partial unique index (servis + ortam + aktif durum); ikincisi 409 <code>DEPLOYMENT_IN_PROGRESS</code> + çalışan deploy'un id'si.</td><td>İki rollout aynı anda birbirini ezer.</td><td>CI beklemeli ya da iptal etmeli. Alternatif: servis başına sıra (daha karmaşık).</td></tr><tr id="d4"><td><b>Who may deploy or approve?</b></td><td>CI'ın OIDC kimliği (repo) bir takıma eşlenir; takım servisin sahibi olmalı. Sadece imzalı image; cluster da admission policy ile tekrar kontrol eder. Prod'u ikinci bir kişi onaylar; kendi deploy'unu onaylayamazsın.</td><td>Prod'a rastgele bir image gitmemeli; tek kişi hatası engellenmeli.</td><td>Onay deploy'u yavaşlatır; acil durum için audit'li break-glass yolu gerekir.</td></tr><tr id="d5"><td><b>How does CI see progress or failure?</b></td><td><code>GET /v1/deployments/{id}</code> ile backoff'lu polling: durum, canary adımı, commit; başarısızlıkta neden kodu. Worker bunları Argo CD'den okuyup yazar. 4. aşamada Slack ve webhook.</td><td>Basit, her proxy'den geçer; CI için canlı akışa gerek yok.</td><td>Polling yükü küçük (günde birkaç yüz deploy).</td></tr><tr id="d6"><td><b>What do cancel and rollback do mid-rollout?</b></td><td><code>:cancel</code>: worker Argo Rollouts'a rollout'u iptal ettirir (abort), trafik eski sürüme döner, sonra config reposunu eski digest'e geri alır. <code>:rollback</code>: önceki sağlıklı digest'i commit'leyen yeni bir deployment.</td><td>Geri dönüş de bir commit; geçmiş Git'te ve <code>deployments</code>'ta tek çizgide.</td><td>Rollback da birkaç dakika sürer (Argo CD sync + Rollouts).</td></tr><tr id="d7"><td><b>What if the worker crashes mid-rollout?</b></td><td>Rollout durmaz: Argo CD ve Rollouts worker'dan bağımsız çalışır. Lease biter, başka worker devralır; commit zaten repodaysa tekrar atmaz, izlemeye devam eder.</td><td>Yürütme ile takip ayrı; worker'ın ölmesi deploy'u etkilememeli.</td><td>Worker yokken Postgres'teki durum birkaç saniye geride kalır.</td></tr><tr id="d8"><td><b>What if the Deploy API is down during an incident?</b></td><td>Çalışan servisler ve süren rollout'lar etkilenmez: API müşteri trafiğinin yolunda değil, yürütme Argo CD'de. Acil rollback için ekip config reposundaki commit'i doğrudan geri alır (break-glass); Git geçmişi audit kaydı.</td><td>Deploy platformu, kendi arızasında insanları kilitlememeli.</td><td>API'yi atlayan değişiklik politikayı da atlar; sonradan API'ye kaydedilmeli.</td></tr><tr id="d10"><td><b>Someone changes the cluster by hand with kubectl.</b></td><td>Argo CD farkı (drift) görür ve repodaki hale geri döndürür (self-heal). Kalıcı değişiklik sadece Git'ten.</td><td>Git tek doğruluk kaynağı olmalı; yoksa ne çalıştığını kimse bilmez.</td><td>Acil elle düzeltme de geri alınır; o yüzden acil durum yolu Git'ten (revert).</td></tr><tr id="d9"><td><b>How do we know it's healthy?</b></td><td>Deploy başarı oranı, süresi (p95), rollback oranı, takım başına merge'den prod'a süre; API için hata oranı ve gecikme.</td><td>Platform ekibinin gerçek ölçüsü: geliştiriciler ne kadar hızlı ve güvenle çıkıyor.</td><td>Metrikleri takım bazında göstermek; kardinalite küçük, sorun değil.</td></tr></table></div>
+<nav class="pager"><a href="cozum.html">← 3 · Minimum çözüm</a><a href="olcek.html">5 · Ölçek ve follow-up →</a></nav>
+</main>
+<footer>Kişisel çalışma notları. Senaryolar alıştırma amaçlıdır; şirket adları anonimleştirilmiştir.</footer>
+
+</body>
+</html>

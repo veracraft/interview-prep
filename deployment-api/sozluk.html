@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deployment API · Sözlük</title>
+<link rel="stylesheet" href="../assets/site.css?v=11">
+</head>
+<body>
+<header class="topbar"><div class="topbar-inner">
+  <a class="brand" href="../index.html">Mülakat Hazırlığı</a>
+  <nav>
+    <a href="../index.html">Ana sayfa</a>
+    <a href="../knowledge-sync/kapsam.html">Knowledge Sync</a>
+    <a href="../agent-tasks/kapsam.html">Agent Tasks</a>
+    <a class="active" href="kapsam.html">Deployment API</a>
+  </nav>
+</div>
+<div class="subnav"><nav>
+    <a href="kapsam.html">1 · Kapsam</a>
+    <a href="api.html">2 · API</a>
+    <a href="cozum.html">3 · Minimum çözüm</a>
+    <a href="hata.html">4 · Hata ve güvenlik</a>
+    <a href="olcek.html">5 · Ölçek ve follow-up</a>
+    <a class="active" href="sozluk.html">Sözlük</a>
+    <a href="mock.html">Mock</a>
+</nav></div></header>
+
+<main>
+<h1>Deployment API · Sözlük</h1>
+<p class="lead">Sadece bu sistemin diyagramındaki kavramlar, diyagramdaki sıraya göre. Her biri için: ne olduğu, bizdeki görevi, <b>hangi problemi çözdüğü, neden şimdi gerektiği, daha basit alternatifi</b> ve söyleyeceğin İngilizce cümle (🗣).</p>
+<label for="q" class="small muted">Ara (Türkçe ya da İngilizce):</label>
+<input id="q" class="search" type="search" placeholder="ör. kuyruk, idempotent, izin" autocomplete="off">
+<p id="count" class="small muted"></p>
+<nav class="toc"><b>Kavramlar</b><ol><li><a href="#gateway">Gateway</a></li><li><a href="#api">API</a></li><li><a href="#lro">202 Accepted ve uzun süren iş</a></li><li><a href="#idempotency">Idempotency</a></li><li><a href="#digest">Image digest</a></li><li><a href="#postgres">Postgres</a></li><li><a href="#deploy-worker">Deploy worker</a></li><li><a href="#gitops">GitOps ve config reposu</a></li><li><a href="#argo-cd">Argo CD</a></li><li><a href="#kubernetes">Kubernetes</a></li><li><a href="#canary">Canary ve Argo Rollouts</a></li><li><a href="#metrics">Prometheus</a></li><li><a href="#approval">Prod onayı</a></li><li><a href="#notifier">Notifier</a></li></ol></nav>
+<section class="term" id="gateway" data-k="gateway jwt oidc sso rate limit envoy güvenlik turnike oidc sso workload identity">
+<h3>Gateway <a class="anchor" href="#gateway">#</a></h3><div class="tags"><span class="tag a">Aşama 1</span></div>
+<dl class="kv"><dt>Ne?</dt><dd>API'lerin önündeki güvenlik görevlisi. Her isteği API'ye ulaşmadan kontrol eder.</dd><dt>Benzetme</dt><dd>Binanın girişindeki turnike ve güvenlik.</dd><dt>Bizde</dt><dd>CI'ın <b>OIDC</b> token'ını (repo ve takım kimliği, kısa ömürlü, secret yok) ya da geliştiricinin SSO token'ını doğrular; rate limit uygular.</dd></dl>
+<div class="decide"><div><b>Hangi problemi çözüyor?</b> Kimlik doğrulama, rate limit ve istek boyutu sınırı tek yerde.</div><div><b>Neden şimdi?</b> 1. aşama: güvenlik sonraya bırakılmaz.</div><div><b>Daha basit alternatif:</b> Her serviste aynı middleware (az servis varken yeter).</div><div><b>Bedeli:</b> Bir ağ adımı daha; yanlış ayar tüm trafiği etkiler.</div></div>
+<div class="say">The gateway handles cross-cutting concerns once: token validation, rate limits, request size. So every service doesn't reimplement them.</div>
+</section>
+<section class="term" id="api" data-k="api stateless hpa garson kapı ">
+<h3>API <span class="muted small">(Deploy API)</span> <a class="anchor" href="#api">#</a></h3><div class="tags"><span class="tag a">Aşama 1</span></div>
+<dl class="kv"><dt>Ne?</dt><dd>Dış dünyanın sistemle konuştuğu kapı. HTTP istekleri alır, kontrol eder ve cevap döner.</dd><dt>Benzetme</dt><dd>Restorandaki garson. Siparişi alır, deftere yazar, "tamam, hazırlanıyor" der. Yemeği kendisi pişirmez.</dd><dt>Bizde</dt><dd>Deploy API. Takımın servisin sahibi olduğunu ve aktif deploy olmadığını kontrol eder, <code>deployments</code> satırını yazar, 202 döner. Rollout'u kendisi yapmaz.</dd><dt>Stateless</dt><dd>API kendi içinde bir şey hatırlamaz, her şey Postgres'te. Bu yüzden 1 pod da çalışabilir, 20 pod da; Kubernetes yük artınca pod ekler (HPA).</dd></dl>
+<div class="decide"><div><b>Hangi problemi çözüyor?</b> İstemciye net bir sözleşme; isteği doğrulayıp kalıcı kaydetmek.</div><div><b>Neden şimdi?</b> 1. aşama: o olmadan sistem yok.</div><div><b>Daha basit alternatif:</b> Yok; istemcinin doğrudan veritabanına yazması kabul edilemez.</div><div><b>Bedeli:</b> Ağır işi içinde yaparsa timeout; stateless tutulmalı.</div></div>
+<div class="say">The API layer is stateless. It validates the request, records it durably, and returns 202. The heavy work happens in workers.</div>
+</section>
+<section class="term" id="lro" data-k="202 accepted long running operation lro polling status uzun süren location ">
+<h3>202 Accepted ve uzun süren iş <a class="anchor" href="#lro">#</a></h3><div class="tags"><span class="tag a">Aşama 1</span></div>
+<dl class="kv"><dt>Ne?</dt><dd>"İsteğini aldım ve kaydettim, ama iş henüz bitmedi" demek. Cevapta işin durumunu sorgulayabileceğin bir adres döner (<code>Location</code> header'ı).</dd><dt>Benzetme</dt><dd>Kuru temizlemecinin fişi. Elbiseyi bıraktın, fişi aldın; ne zaman hazır olduğunu fişle sorarsın.</dd><dt>Bizde</dt><dd>Rollout dakikalar sürer. CI <code>GET /v1/deployments/{id}</code> ile durumu sorar.</dd><dt>Dikkat</dt><dd>202 dönmeden önce iş <b>kalıcı olarak kaydedilmiş</b> olmalı. Kaydetmediğin işi kabul etme.</dd></dl>
+
+<div class="say">This operation can take minutes, so instead of holding the request open I return 202 with a status resource the client can poll.</div>
+</section>
+<section class="term" id="idempotency" data-k="idempotency idempotent tekrar retry idempotency-key duplicate tekrarlı ">
+<h3>Idempotency <a class="anchor" href="#idempotency">#</a></h3><div class="tags"><span class="tag a">Aşama 1</span></div>
+<dl class="kv"><dt>Ne?</dt><dd>Aynı isteği bir kez de yapsan, beş kez de yapsan sonuç aynı kalır.</dd><dt>Benzetme</dt><dd>Asansör düğmesi. Beş kez bassan da asansör bir kez gelir.</dd><dt>Bizde</dt><dd>CI tekrar gönderirse <code>Idempotency-Key</code> aynı deployment'ı döner. Worker'ın commit'i de tekrarlanabilir: repo zaten o digest'teyse yeni commit atılmaz. <a href="hata.html#d2">Detay →</a></dd><dt>Gerçek hayattan</dt><dd>Ödeme sistemlerinde aynı işlem iki farklı yoldan tetiklenirse iki müşteri kaydı ya da iki fatura oluşabilir. Çözüm önce tasarımda: her yan etkinin <b>tek bir sahibi</b> olsun; idempotency key bunun üstüne güvenlik ağı.</dd></dl>
+
+<div class="say">Clients will retry, so every mutating call accepts an Idempotency-Key. And each side effect has exactly one owner, with the key as a safety net.</div>
+</section>
+<section class="term" id="digest" data-k="image digest sha256 tag latest değişmez immutable">
+<h3>Image digest <a class="anchor" href="#digest">#</a></h3><div class="tags"><span class="tag a">Aşama 1</span></div>
+<dl class="kv"><dt>Ne?</dt><dd>Container image'ının içeriğinden hesaplanan değişmez kimlik: <code>…@sha256:9f2…</code>. Tag (<code>:v1.4</code>, <code>:latest</code>) başka bir image'a taşınabilir; digest taşınamaz.</dd><dt>Bizde</dt><dd>API sadece digest kabul eder; tag gelirse 400. Rollback önceki sağlıklı deployment'ın digest'ine döner.</dd></dl>
+<div class="decide"><div><b>Hangi problemi çözüyor?</b> Ne deploy edildiğinden emin olamamak.</div><div><b>Neden şimdi?</b> 1. aşama: API sözleşmesinin parçası.</div><div><b>Daha basit alternatif:</b> Tag kabul etmek.</div><div><b>Bedeli:</b> CI digest'i iletmeli; insanlar için okunması zor (yanında tag'i de gösteririz).</div></div>
+<div class="say">I deploy by image digest, not tag, so we always know exactly what runs and a rollback goes back to the exact previous version.</div>
+</section>
+<section class="term" id="postgres" data-k="postgres veritabanı database transaction unique constraint kalıcı ">
+<h3>Postgres <a class="anchor" href="#postgres">#</a></h3><div class="tags"><span class="tag a">Aşama 1, 2</span></div>
+<dl class="kv"><dt>Ne?</dt><dd>Ana veritabanı. Kalıcı ve doğru olması gereken her şey burada.</dd><dt>Bizde</dt><dd><code>services</code>, <code>deployments</code>. Aynı zamanda <b>kuyruk</b>: worker bekleyen deploy'u <code>FOR UPDATE SKIP LOCKED</code> ile alır. <a href="cozum.html#veri">Örnek satırlar →</a></dd><dt>Neden</dt><dd>Transaction ve unique constraint ile doğruluğu garanti eder. Başka bir veritabanını (ör. Cassandra) ancak gerçek bir yazma sınırına ulaşınca önerirsin.</dd><dt>Multi-tenant</dt><dd>Her tabloda <code>tenant_id</code>; bir müşteri asla başka müşterinin verisini görmemeli. <a href="../ortak.html#tenant">Katmanlar →</a></dd></dl>
+<div class="decide"><div><b>Hangi problemi çözüyor?</b> Kalıcı ve doğru durum; unique ve transaction ile kuralları veritabanı garanti eder.</div><div><b>Neden şimdi?</b> 1. aşama; 2. aşamada kuyruk olarak da.</div><div><b>Daha basit alternatif:</b> Bu zaten en basit seçenek; günde birkaç yüz iş için ayrı kuyruk gerekmez.</div><div><b>Bedeli:</b> Tek yazma noktası; büyüyünce read replica ve partition.</div></div>
+<div class="say">Postgres is the source of truth. Uniqueness and state transitions are enforced there, not just in application code.</div>
+</section>
+<section class="term" id="deploy-worker" data-k="deploy worker lease skip locked commit watch argo">
+<h3>Deploy worker <a class="anchor" href="#deploy-worker">#</a></h3><div class="tags"><span class="tag a">Aşama 2</span></div>
+<dl class="kv"><dt>Ne?</dt><dd>Deploy'u başlatıp izleyen arka plan süreci. Rollout'u kendisi yapmaz.</dd><dt>Ne yapar</dt><dd><ol><li>Bekleyen deploy'u Postgres'ten <code>FOR UPDATE SKIP LOCKED</code> ile alır ve lease yazar.</li><li>Prod ise onay bekler.</li><li>Config reposuna yeni image digest'i ile commit atar.</li><li>Argo CD'den sync, health ve canary adımını izler; Postgres'e yazar.</li></ol></dd><dt>Çökerse</dt><dd>Rollout durmaz: Argo CD ve Rollouts kendi başına devam eder. Lease biter, başka worker devralır; commit zaten repodaysa tekrar atmaz, izlemeye devam eder.</dd></dl>
+<div class="decide"><div><b>Hangi problemi çözüyor?</b> Deploy'u API isteğinin dışında başlatıp sonucunu takip etmek.</div><div><b>Neden şimdi?</b> 2. aşama.</div><div><b>Daha basit alternatif:</b> API isteğinin içinde commit atmak (izleme yine bir yere lazım).</div><div><b>Bedeli:</b> Git ile Postgres arasında iki durum: commit atıldı ama kaydedilemediyse, worker repoya bakıp düzeltir.</div></div>
+<div class="say">The worker just claims the deployment, commits the new digest to the config repo and watches Argo CD. If it dies, the rollout keeps going, and another worker picks up the watching.</div>
+</section>
+<section class="term" id="gitops" data-k="gitops config repo git values helm kustomize source of truth iac terraform">
+<h3>GitOps ve config reposu <a class="anchor" href="#gitops">#</a></h3><div class="tags"><span class="tag a">Aşama 2</span></div>
+<dl class="kv"><dt>Ne?</dt><dd>Cluster'da ne çalışması gerektiğini bir Git reposunda tutmak. Değişiklik = commit. Bir araç (Argo CD) cluster'ı sürekli repodaki duruma getirir.</dd><dt>Bizde</dt><dd><code>apps/checkout/prod/values.yaml</code> içindeki image digest'i. Worker bunu değiştiren commit'i atar; commit mesajında deployment id'si var.</dd><dt>Neden</dt><dd>Git tek doğruluk kaynağı: ne çalıştığı, ne zaman ve kim tarafından değiştirildiği Git geçmişinde. Geri almak = commit'i geri almak.</dd><dt>IaC ile farkı</dt><dd>Terraform altyapıyı kurar (cluster, Argo CD'nin kendisi, registry). GitOps uygulamaların hangi sürümde çalışacağını yönetir. İkisi farklı katman.</dd></dl>
+<div class="decide"><div><b>Hangi problemi çözüyor?</b> Cluster'daki durumun nereden geldiğini bilmemek; elle yapılan değişiklikler.</div><div><b>Neden şimdi?</b> 2. aşama: ekip zaten Argo CD kullanıyor.</div><div><b>Daha basit alternatif:</b> Worker'ın Kubernetes API'sine doğrudan apply etmesi.</div><div><b>Bedeli:</b> Git'e yazma hızı ve çakışmalar; aynı dosyaya iki commit (tek aktif deploy kuralı bunu önler).</div></div>
+<div class="say">Git is the source of truth for what runs. A deploy is just a commit that changes the image digest, and Argo CD makes the clusters match it.</div>
+</section>
+<section class="term" id="argo-cd" data-k="argo cd gitops sync self-heal drift application applicationset">
+<h3>Argo CD <a class="anchor" href="#argo-cd">#</a></h3><div class="tags"><span class="tag a">Aşama 2</span></div>
+<dl class="kv"><dt>Ne?</dt><dd>Kubernetes içinde çalışan bir GitOps aracı. Repoyu izler ve cluster'ı oradaki duruma getirir (sync).</dd><dt>Self-heal</dt><dd>Biri cluster'da elle bir şey değiştirirse Argo CD farkı (drift) görür ve repodaki hale geri döndürür.</dd><dt>Bizde</dt><dd>Her servis + ortam bir Argo CD uygulaması (ör. <code>checkout-prod</code>). Worker onun sync ve health durumunu okur. Çok cluster'da ApplicationSet ile her cluster'a aynı uygulama.</dd></dl>
+<div class="decide"><div><b>Hangi problemi çözüyor?</b> Repodaki durumu cluster'lara güvenle ve sürekli uygulamak.</div><div><b>Neden şimdi?</b> 2. aşama.</div><div><b>Daha basit alternatif:</b> Worker'ın kendi apply döngüsü.</div><div><b>Bedeli:</b> Argo CD'yi işletmek; çok sayıda uygulamada performans ayarı (sharding).</div></div>
+<div class="say">Argo CD watches the config repo and keeps every cluster in sync with it, including undoing manual changes.</div>
+</section>
+<section class="term" id="kubernetes" data-k="kubernetes k8s cluster declarative manifest pod">
+<h3>Kubernetes <a class="anchor" href="#kubernetes">#</a></h3><div class="tags"><span class="tag a">Aşama 2</span></div>
+<dl class="kv"><dt>Ne?</dt><dd>Container'ları çalıştıran platform. "İstenen durumu" yazarsın (bu image, bu kadar pod); Kubernetes oraya kendisi ulaşır.</dd><dt>Bizde</dt><dd>Kimse doğrudan dokunmaz; Argo CD uygular. 3. aşamada servis Deployment yerine Argo Rollouts kaynağı olarak tanımlıdır.</dd></dl>
+
+<div class="say">Nobody applies to the cluster by hand; Argo CD does, from Git.</div>
+</section>
+<section class="term" id="canary" data-k="canary kanarya argo rollouts analysis rollback yüzde trafik">
+<h3>Canary ve Argo Rollouts <a class="anchor" href="#canary">#</a></h3><div class="tags"><span class="tag a">Aşama 3</span></div>
+<dl class="kv"><dt>Ne?</dt><dd>Yeni sürümü önce trafiğin küçük bir kısmına açmak (%10), sağlıklıysa adım adım artırmak (%50, %100).</dd><dt>Benzetme</dt><dd>Madencilerin kanaryası: tehlikeyi herkesten önce küçük bir grup fark eder.</dd><dt>Argo Rollouts</dt><dd>Bunu yapan Kubernetes eklentisi. Adımlar ve analiz Rollout kaynağında tanımlı: her adımdan sonra Prometheus'a sorar; kötüyse kendini iptal eder ve trafiği eski sürüme döndürür. Canary mantığını biz yazmıyoruz.</dd></dl>
+<div class="decide"><div><b>Hangi problemi çözüyor?</b> Kötü bir sürümün tüm kullanıcıları etkilemesi.</div><div><b>Neden şimdi?</b> 3. aşama: otomatik rollback istendi.</div><div><b>Daha basit alternatif:</b> Düz rolling update + insanın izlemesi.</div><div><b>Bedeli:</b> Daha uzun deploy; trafik bölme ve iyi metrikler gerekir.</div></div>
+<div class="say">Argo Rollouts does the canary: it shifts traffic in steps, runs an analysis against Prometheus after each step, and aborts back to the stable version if it fails.</div>
+</section>
+<section class="term" id="metrics" data-k="metrics prometheus hata oranı p99 gecikme analysis slo">
+<h3>Prometheus <a class="anchor" href="#metrics">#</a></h3><div class="tags"><span class="tag a">Aşama 3</span></div>
+<dl class="kv"><dt>Ne?</dt><dd>Metrik sistemi: hata oranı, gecikme, istek sayısı.</dd><dt>Bizde</dt><dd>Argo Rollouts'un analiz adımı sorgular: yeni pod'ların 5xx oranı ve p99'u, aynı anda çalışan eski pod'larla karşılaştırılır. Yeterli trafik yoksa karar verilmez.</dd></dl>
+<div class="decide"><div><b>Hangi problemi çözüyor?</b> Rollout'un sağlıklı olup olmadığını otomatik bilmek.</div><div><b>Neden şimdi?</b> 3. aşama.</div><div><b>Daha basit alternatif:</b> İnsan izler, elle rollback yapar.</div><div><b>Bedeli:</b> Az trafikte karar verilemez; metrik sorguları iyi yazılmalı.</div></div>
+<div class="say">The analysis compares the canary with the stable pods at the same time, so a busy hour doesn't look like a bad release.</div>
+</section>
+<section class="term" id="approval" data-k="approval onay four-eyes awaiting_approval approve prod">
+<h3>Prod onayı <a class="anchor" href="#approval">#</a></h3><div class="tags"><span class="tag a">Aşama 4</span></div>
+<dl class="kv"><dt>Ne?</dt><dd>Prod deploy'unun ikinci bir kişi tarafından onaylanması (four-eyes).</dd><dt>Bizde</dt><dd>Deploy commit'ten önce <code>awaiting_approval</code> durumunda bekler; <code>POST /v1/deployments/{id}:approve</code>. Kendi deploy'unu onaylayamazsın (403). Her şey audit log'da.</dd><dt>Alternatif</dt><dd>Worker commit yerine config reposunda PR açar; onay = PR review (CODEOWNERS). Git'e yakın ama durum API'de ve PR'da ikiye bölünür.</dd></dl>
+<div class="decide"><div><b>Hangi problemi çözüyor?</b> Tek kişinin hatalı ya da kötü niyetli prod deploy'u.</div><div><b>Neden şimdi?</b> Follow-up (4. aşama): prod politikası gerektiriyorsa.</div><div><b>Daha basit alternatif:</b> Sadece imzalı image ve servis sahipliği.</div><div><b>Bedeli:</b> Deploy süresi uzar; acil durumda audit'li bir break-glass yolu gerekir.</div></div>
+<div class="say">Production deploys wait for a second person to approve, and you can't approve your own.</div>
+</section>
+<section class="term" id="notifier" data-k="notifier bildirim slack webhook">
+<h3>Notifier <a class="anchor" href="#notifier">#</a></h3><div class="tags"><span class="tag a">Aşama 4</span></div>
+<dl class="kv"><dt>Ne?</dt><dd>Sonucu (bitti, rollback oldu, onay bekliyor) Slack'e ve kayıtlı webhook'lara gönderen bileşen.</dd></dl>
+<div class="decide"><div><b>Hangi problemi çözüyor?</b> Ekiplerin sonucu polling yapmadan öğrenmesi.</div><div><b>Neden şimdi?</b> 4. aşama.</div><div><b>Daha basit alternatif:</b> Sadece <code>GET</code> ile polling.</div><div><b>Bedeli:</b> Webhook teslimi: retry, imza, kaybolan bildirim.</div></div>
+<div class="say">Teams get pushed a notification when a deploy finishes or needs approval, so they don't have to watch it.</div>
+</section>
+<nav class="pager"><a href="olcek.html">← 5 · Ölçek ve follow-up</a><a href="mock.html">Mock →</a></nav>
+</main>
+<footer>Kişisel çalışma notları. Senaryolar alıştırma amaçlıdır; şirket adları anonimleştirilmiştir.</footer>
+<script>
+(function () {
+  const q = document.getElementById('q');
+  const terms = Array.from(document.querySelectorAll('.term'));
+  const count = document.getElementById('count');
+  const norm = s => s.toLocaleLowerCase('tr');
+  q.addEventListener('input', () => {
+    const v = norm(q.value.trim());
+    let n = 0;
+    terms.forEach(t => {
+      const hit = !v || norm(t.textContent + ' ' + (t.dataset.k || '')).includes(v);
+      t.classList.toggle('hidden', !hit);
+      if (hit) n++;
+    });
+    count.textContent = v ? n + ' kavram bulundu' : '';
+  });
+})();
+</script>
+</body>
+</html>

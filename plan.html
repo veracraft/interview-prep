@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bugünün planı</title>
+<link rel="stylesheet" href="assets/site.css?v=11">
+<style>
+.block { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; margin: 12px 0; }
+.block .when { font-size: 13px; color: var(--text-3); }
+.block h3 { margin: 2px 0 6px; font-size: 17px; }
+.block label { display: flex; gap: 10px; align-items: flex-start; padding: 3px 0; cursor: pointer; }
+.block input[type=checkbox] { margin-top: 5px; width: 16px; height: 16px; accent-color: #9FE1CB; flex: none; }
+.block label.done span { color: var(--text-3); text-decoration: line-through; }
+.break { color: var(--text-3); font-size: 14px; margin: 6px 4px; }
+.progress { height: 8px; background: var(--surface-2); border-radius: 99px; overflow: hidden; margin: 6px 0 2px; }
+.progress div { height: 100%; width: 0; background: #5DCAA5; transition: width .3s; }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="topbar-inner">
+  <a class="brand" href="index.html">Mülakat Hazırlığı</a>
+  <nav>
+    <a class="active" href="index.html">Ana sayfa</a>
+    <a href="knowledge-sync/kapsam.html">Knowledge Sync</a>
+    <a href="agent-tasks/kapsam.html">Agent Tasks</a>
+    <a href="deployment-api/kapsam.html">Deployment API</a>
+  </nav>
+</div>
+<div class="subnav"><nav>
+    <a href="index.html">Playbook</a>
+    <a class="active" href="plan.html">Bugünün planı</a>
+    <a href="anlatim.html">Nasıl anlatırım?</a>
+    <a href="sorular.html">Genel takip soruları</a>
+    <a href="ortak.html">Ortak konular</a>
+    <a href="index.html#paket">Baskı paketi</a>
+</nav></div></header>
+
+<main>
+  <h1>Bugünün planı</h1>
+  <p class="lead">Mülakattan önceki gün için yaklaşık 6 saatlik plan. Yeni bilgi öğrenmek değil, <b>bildiğini sesli ve sırayla anlatabilmek</b> hedef. İşaretlediğin adımlar bu tarayıcıda saklanır.</p>
+
+  <div class="progress"><div id="bar"></div></div>
+  <p class="small muted" id="ptext"></p>
+
+  <div class="note small"><b>Üç kural:</b> (1) Her şeyi <b>sesli</b> ve İngilizce söyle. (2) Önce kağıda çiz, sonra kontrol et. (3) Akşam 20:30'dan sonra yeni bir şey çalışma.</div>
+
+  <div class="block" data-id="b1">
+    <div class="when">09:00 – 09:30 · 30 dk</div>
+    <h3>Isınma: ürünü anla</h3>
+    <label><input type="checkbox" data-k="1"><span><a href="knowledge-sync/kapsam.html">Ürün sayfasını</a> baştan sona oku.</span></label>
+    <label><input type="checkbox" data-k="2"><span>"Mülakatta açılış için tek cümle"yi 3 kez sesli söyle, sonra bakmadan söyle.</span></label>
+  </div>
+
+  <div class="block" data-id="b2">
+    <div class="when">09:30 – 10:30 · 60 dk</div>
+    <h3>Knowledge Sync'i çiz</h3>
+    <label><input type="checkbox" data-k="3"><span><a href="knowledge-sync/cozum.html#diyagram">Diyagram A</a>'yı aşama aşama izle; her aşamada kutulara tıklayıp sözlüğü oku.</span></label>
+    <label><input type="checkbox" data-k="4"><span>Aşama 1-2'yi (basit v1) kağıda <b>bakmadan</b> çiz ve 2 dakikada sesli anlat. 3 kez tekrarla.</span></label>
+    <label><input type="checkbox" data-k="5"><span>Aşama 3-5'i ekle; her parça için "neden?" cümlesini söyle (<a href="anlatim.html#kalip">4 adımlı kalıp</a>).</span></label>
+    <label><input type="checkbox" data-k="6"><span><a href="knowledge-sync/cozum.html#neden-gateway">Neden gateway 1. aşamada?</a> tablosunu oku.</span></label>
+  </div>
+  <p class="break">10:30 – 10:45 · mola (ekransız)</p>
+
+  <div class="block" data-id="b3">
+    <div class="when">10:45 – 11:45 · 60 dk</div>
+    <h3>Sözlük turu</h3>
+    <label><input type="checkbox" data-k="7"><span><a href="knowledge-sync/sozluk.html">Sözlükteki</a> her kavramın 🗣 cümlesini sesli oku.</span></label>
+    <label><input type="checkbox" data-k="8"><span>En zorlandığın 5 kavramı not et; her biri için kendi cümleni kur.</span></label>
+    <label><input type="checkbox" data-k="9"><span>Arama kutusunu kullanarak rastgele 5 kavramı 30'ar saniyede anlat.</span></label>
+  </div>
+
+  <div class="block" data-id="b4">
+    <div class="when">11:45 – 12:30 · 45 dk</div>
+    <h3>Agent Tasks'ı çiz</h3>
+    <label><input type="checkbox" data-k="10"><span><a href="agent-tasks/cozum.html#diyagram">Diyagram B</a>'yi izle, sonra aşama 1-2'yi bakmadan çiz.</span></label>
+    <label><input type="checkbox" data-k="11"><span>Şu üç soruya sesli cevap ver: kullanıcı bağlantıyı kaybederse? worker ölürse? tool timeout olursa?</span></label>
+  </div>
+  <p class="break">12:30 – 13:30 · öğle arası, kısa yürüyüş</p>
+
+  <div class="block" data-id="b5">
+    <div class="when">13:30 – 14:15 · 45 dk</div>
+    <h3>API sözleşmesi</h3>
+    <label><input type="checkbox" data-k="12"><span><a href="paket/ai-company.html">AI Company paketi</a> s. 3 (API kopya kağıdı): status kodları, hata formatı, sayfalama, idempotency, 202.</span></label>
+    <label><input type="checkbox" data-k="13"><span>Knowledge Sources API endpoint tablosunu (paket s. 6) <b>ezberden</b> yaz, tek bir tam request/response ile.</span></label>
+  </div>
+
+  <div class="block" data-id="b6">
+    <div class="when">14:15 – 15:00 · 45 dk</div>
+    <h3>Mock mülakat</h3>
+    <label><input type="checkbox" data-k="14"><span><a href="knowledge-sync/mock.html">Mock mülakatı</a> bir kez iki rolü de sesli okuyarak geç.</span></label>
+    <label><input type="checkbox" data-k="15"><span>"Adayın cevaplarını gizle" ile tekrar et; cevapları kendi cümlelerinle söyle ve telefona kaydet.</span></label>
+    <label><input type="checkbox" data-k="16"><span>Kaydı dinle: 40 saniyeden uzun cevapları işaretle, kısaltılmış halini bir kez daha söyle.</span></label>
+    <label><input type="checkbox" data-k="27"><span><a href="agent-tasks/mock.html">Mock B (Agent Tasks)</a>'yi cevaplar gizli olarak bir kez geç.</span></label>
+  </div>
+  <p class="break">15:00 – 15:15 · mola</p>
+
+  <div class="block" data-id="b7">
+    <div class="when">15:15 – 16:00 · 45 dk</div>
+    <h3>Tuzaklar ve trade-off'lar</h3>
+    <label><input type="checkbox" data-k="17"><span>Paket s. 11 (Senaryolarda ince noktalar): her satırın sağ sütununu kapatıp tahmin et.</span></label>
+    <label><input type="checkbox" data-k="18"><span><a href="anlatim.html#tuzaklar">Hafızanı düzelt</a> listesini sesli oku.</span></label>
+    <label><input type="checkbox" data-k="28"><span><a href="sorular.html">Takip sorularından</a> "Rastgele bir soru" ile 8 soru çek; açmadan önce 20 saniyede cevapla.</span></label>
+    <label><input type="checkbox" data-k="19"><span>Paket s. 14 (auth platformu vaka çalışması): "biggest trade-off" cevabını sesli söyle.</span></label>
+  </div>
+
+  <div class="block" data-id="b8">
+    <div class="when">16:00 – 16:45 · 45 dk</div>
+    <h3>Tam prova (zamanlayıcıyla)</h3>
+    <label><input type="checkbox" data-k="20"><span>Paket s. 15'teki 25 dakikalık kağıt mock'u <b>Agent Tasks</b> ile yap.</span></label>
+    <label><input type="checkbox" data-k="21"><span>Puanlama tablosuyla kendini değerlendir; en zayıf satır için 10 dk ayır.</span></label>
+  </div>
+
+  <div class="block" data-id="b9">
+    <div class="when">16:45 – 17:15 · 30 dk</div>
+    <h3>Kod sorulursa diye</h3>
+    <label><input type="checkbox" data-k="22"><span>Paket s. 12'deki Go endpoint'ini bir kez oku, sonra sırayı ezberden söyle: validate → tenant → idempotency → iş → status → tek hata formatı.</span></label>
+  </div>
+  <p class="break">17:15 – 20:00 · serbest zaman, akşam yemeği. Çalışma yok.</p>
+
+  <div class="block" data-id="b10">
+    <div class="when">20:00 – 20:30 · 30 dk · hafif</div>
+    <h3>Son dokunuş ve hazırlık</h3>
+    <label><input type="checkbox" data-k="23"><span>20 saniyelik tanıtımını ve 2 sorunu sesli prova et.</span></label>
+    <label><input type="checkbox" data-k="24"><span>Mülakat platformunun deneme ortamını aç: editör, whiteboard, varsa AI asistan.</span></label>
+    <label><input type="checkbox" data-k="25"><span>Kamera, mikrofon, internet, şarj; kağıt ve kalem masada.</span></label>
+    <label><input type="checkbox" data-k="26"><span>Erken yat. Uyku, bir saat daha çalışmaktan değerlidir.</span></label>
+  </div>
+
+  <h2>Mülakat sabahı (15 dk)</h2>
+  <ol>
+    <li>Ürün sayfasındaki açılış cümlesi ve basit v1 (aşama 1-2) için bir kez sesli tekrar.</li>
+    <li>İlk 2 dakikada soracakların: süre, tasarım/kod oranı, AI asistan izni, Go kullanılabilir mi?</li>
+    <li>Sıra: gereksinim → sayılar → <b>API</b> → veri → <b>basit v1</b> → derin dalış → özet.</li>
+    <li>Her kararda bir trade-off cümlesi. Sözün kesilirse dur, sorulana cevap ver.</li>
+  </ol>
+
+  <h2>Sadece 3 saatin varsa</h2>
+  <ol>
+    <li>Ürün sayfası (20 dk)</li>
+    <li>Diyagram A, aşama 1-2'yi bakmadan çiz ve anlat (40 dk)</li>
+    <li>Mock A ve B, cevaplar gizli (45 dk)</li>
+    <li>Takip sorularından rastgele 6 soru (30 dk)</li>
+    <li>Hafızanı düzelt listesi + tanıtım + sorular (25 dk)</li>
+  </ol>
+  <p><button class="btn" type="button" id="reset">İşaretleri sıfırla</button></p>
+</main>
+<footer>Kişisel çalışma notları. Senaryolar alıştırma amaçlıdır; şirket adları anonimleştirilmiştir.</footer>
+<script>
+(function () {
+  const KEY = 'prep-plan-v1';
+  let state = {};
+  try { state = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { state = {}; }
+  const boxes = Array.from(document.querySelectorAll('.block input[type=checkbox]'));
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+  function render() {
+    let done = 0;
+    boxes.forEach(b => {
+      const on = !!state[b.dataset.k];
+      b.checked = on;
+      b.closest('label').classList.toggle('done', on);
+      if (on) done++;
+    });
+    document.getElementById('bar').style.width = Math.round(done / boxes.length * 100) + '%';
+    document.getElementById('ptext').textContent = done + ' / ' + boxes.length + ' adım tamamlandı';
+  }
+  boxes.forEach(b => b.addEventListener('change', () => { state[b.dataset.k] = b.checked; save(); render(); }));
+  document.getElementById('reset').addEventListener('click', () => { state = {}; save(); render(); });
+  render();
+})();
+</script>
+</body>
+</html>

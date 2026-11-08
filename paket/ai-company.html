@@ -1,0 +1,1016 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Company · API ve Solutions Design paketi</title>
+<link rel="stylesheet" href="print.css">
+<style>
+@media screen {
+  body { background: #3f444b; }
+  .page { background: #ece9e1; max-width: 210mm; margin: 14px auto; padding: 11mm 12mm; box-shadow: 0 1px 6px rgba(0,0,0,.35); }
+  .backbar { max-width: 210mm; margin: 0 auto; padding: 12px 4px 0; font: 14px -apple-system, Helvetica, Arial, sans-serif; display: flex; gap: 14px; flex-wrap: wrap; }
+  .backbar a { color: #a9cdf2; text-decoration: none; }
+  .backbar span { color: #d2cfc7 !important; }
+}
+@media screen and (max-width: 820px) {
+  .page { padding: 14px; margin: 10px 8px; }
+  .cols, .cols3 { grid-template-columns: 1fr !important; }
+  .timeline { flex-wrap: wrap; }
+  pre { overflow-x: auto; white-space: pre; }
+  table { display: block; overflow-x: auto; }
+}
+@media print { .backbar { display: none; } }
+</style>
+</head>
+<body>
+<div class="backbar"><a href="../index.html">← Ana sayfa</a><a href="../pdf/ai-company.pdf">PDF indir</a><span style="color:#888">A4, gerçek boyut, çift taraflı yazdır.</span></div>
+<section class="page">
+  <div class="ph"><span class="t">60 dakikalık oyun planı</span><span class="n">1 / 15 · Strateji</span></div>
+
+  <table>
+    <tr><th style="width:13%">Dakika</th><th style="width:22%">Adım</th><th>Ne yap / ne söyle</th></tr>
+    <tr><td>0-5</td><td>Tanışma</td><td>Kısa tanıtım. Format soruları: süre, tasarım/kod oranı, AI asistan izni, hangi dil?</td></tr>
+    <tr><td>5-12</td><td><b>Gereksinimler</b></td><td>Kullanıcılar kim? Ana 3-4 use case. <b>Fonksiyonel</b> + <b>fonksiyonel olmayan</b> (latency, availability, tutarlılık, güvenlik, multi-tenant, data residency). Kapsam dışını söyle. Kısa back-of-envelope.</td></tr>
+    <tr><td>12-25</td><td><b>API sözleşmesi</b></td><td>Kaynaklar (resources) → endpoint tablosu → 1-2 tam örnek request/response → hata modeli → auth → sayfalama → idempotency → uzun süren işler (202 + status). <b>Bu turun adı "API Development": burayı aceleye getirme.</b></td></tr>
+    <tr><td>25-32</td><td>Veri modeli</td><td>Postgres tabloları, PK/unique, index'ler, tenant_id her yerde. Neyi Redis'te tutarsın?</td></tr>
+    <tr><td>32-45</td><td><b>Mimari</b></td><td>Whiteboard: Client → LB → Gateway → stateless API (GKE) → Postgres/Redis → kuyruk (Pub/Sub) → worker'lar. Read path ve write path'i ayrı anlat.</td></tr>
+    <tr><td>45-55</td><td>Derin dalış</td><td>Mülakatçının seçtiği konu. Hazır ol: ölçek, hata senaryoları, hot tenant, deploy/rollback, gözlemlenebilirlik, SLO, güvenlik.</td></tr>
+    <tr><td>55-60</td><td>Kapanış + sorular</td><td>"If I had more time I'd…" + 2 soru.</td></tr>
+  </table>
+
+  <h2>Kullanmaya hazır İngilizce cümleler</h2>
+  <div class="cols">
+    <div>
+      <h4>Başlarken</h4>
+      <p class="say">Before I jump into the design, I'd like to clarify the scope and a few requirements.</p>
+      <p class="say">Who are the consumers of this API: our own frontend, third-party integrations, or other internal services?</p>
+      <p class="say">I'll assume multi-tenant SaaS, EU data residency, and roughly X tenants. Does that sound right?</p>
+      <p class="say">Out of scope for now: billing and the admin UI. I'll mention them at the end if time allows.</p>
+      <h4>API aşaması</h4>
+      <p class="say">Let me start with the resources and the contract, because the contract is the hardest thing to change later.</p>
+      <p class="say">This operation can take minutes, so instead of holding the request open I'll return 202 with an operation resource the client can poll, plus an optional webhook.</p>
+      <p class="say">Clients will retry, so every mutating call accepts an Idempotency-Key.</p>
+    </div>
+    <div>
+      <h4>Mimari / trade-off</h4>
+      <p class="say">I'll keep the API layer stateless so we can scale it horizontally with an HPA, and push the heavy work to async workers.</p>
+      <p class="say">The trade-off here is eventual consistency: the user sees the change within a few seconds instead of immediately. For this use case that's acceptable, but not for permissions.</p>
+      <p class="say">I'd start with Postgres because it's what the team already runs well; I'd only move to something else when we hit a concrete limit.</p>
+      <h4>Takılınca / geri bildirim</h4>
+      <p class="say">That's a good point. Let me rethink that part.</p>
+      <p class="say">I see two options here. Let me compare them quickly and then pick one.</p>
+      <p class="say">I'm not 100% sure about the exact limit, but the way I'd find out is…</p>
+      <h4>Bitirirken</h4>
+      <p class="say">To summarize: the contract, the data model, the async pipeline, and how we'd operate it. The biggest risk I see is X, and I'd mitigate it with Y.</p>
+    </div>
+  </div>
+  <h2>Puan kaybettiren 8 hata</h2>
+  <ol class="small">
+    <li>Gereksinim sormadan kutu çizmeye başlamak.</li>
+    <li>API'yi atlayıp direkt mimariye geçmek (bu turun adı API!).</li>
+    <li>Hata modelini, sayfalamayı, idempotency'yi unutmak.</li>
+    <li>"Kafka/Cassandra koyalım" deyip <b>neden</b> sorusuna cevap verememek. AI Company'nin stack'i: <b>GCP, Kubernetes, Terraform, Postgres, Redis, TypeScript.</b> Önce bunları kullan.</li>
+    <li><b>Multi-tenancy'yi (tenant izolasyonu)</b> unutmak. Kurumsal SaaS'ta en kritik konu.</li>
+    <li>Operasyon tarafını unutmak: deploy, rollback, SLO, alert, on-call. <b>SRE/Infra</b> rolünde en güçlü yanın bu olmalı.</li>
+    <li>Mülakatçının ipucunu savunmaya geçmek. Şirketlerin mülakat rehberleri açıkça diyor: <b>geri bildirime açık ol, adapte ol.</b></li>
+  </ol>
+</section>
+
+
+<section class="page">
+  <div class="ph"><span class="t">Önceki pratik tasarımlar işe yarar mı?</span><span class="n">2 / 15 · Transfer</span></div>
+
+  <div class="box"><b>Kısa cevap: Evet, ama olduğu gibi değil.</b> Önceki pratik tasarımlar (Spam Lookup, Contact Sync, kurumsal IAM) içindeki <b>kalıplar</b> birebir işe yarar: gateway + rate limit, idempotency key, async kuyruk + worker, "single writer per key", cache katmanları, SLO'lar, data residency, JWT/JWKS. <b>Değişmesi gereken üç şey:</b> (1) bu turda <b>API sözleşmesi</b> merkezde olmalı, kutular ikinci planda; (2) AI Company'nin stack'ine çevir (GCP + Postgres + Redis + TS, Cassandra değil); (3) her şeyi <b>multi-tenant enterprise</b> gözüyle anlat (tenant izolasyonu, kurumsal SSO, izin farkındalığı).</div>
+
+  <h2>Kalıp transfer tablosu</h2>
+  <table>
+    <tr><th style="width:24%">Pratik tasarımdaki kalıp</th><th style="width:20%">Nerede vardı</th><th>AI Company'de nerede kullanırsın</th></tr>
+    <tr><td>202 Accepted + kuyruk + worker</td><td>Contact Sync, Spam Report</td><td>Knowledge sync, doküman işleme, embedding, toplu import. AI Company'de LLM/tool çağrıları yavaş olduğu için <b>neredeyse her şey async</b>.</td></tr>
+    <tr><td>Idempotency key (Redis SET NX, TTL)</td><td>Contact Sync</td><td>Her POST'ta <code>Idempotency-Key</code>. Ayrıca DB'de <code>UNIQUE(tenant_id, idempotency_key)</code> → Redis düşse bile güvenli.</td></tr>
+    <tr><td>Partition key ile "single writer"</td><td>Kafka key=user_id / number</td><td>Pub/Sub <b>ordering key</b> = document_id veya task_id. Aynı nesneye iki worker yarışmaz.</td></tr>
+    <tr><td>"Sadece daha yeniyse yaz"</td><td>Cache Updater</td><td><code>ON CONFLICT … DO UPDATE … WHERE excluded.version &gt; t.version</code>: sırasız mesajlarda eski veri yeniyi ezmez.</td></tr>
+    <tr><td>Değişmeyen veri = 0 yazma</td><td>Contact Sync (hash diff)</td><td>Doküman <code>content_hash</code> aynıysa yeniden chunk/embedding yok → <b>LLM maliyeti</b> düşer. Bir AI şirketi için çok güçlü bir cümle.</td></tr>
+    <tr><td>Hot key / hot partition</td><td>Hot number, scammer</td><td><b>Hot tenant / noisy neighbor</b>: büyük müşteri 5M doküman onboard ederken diğerleri beklememeli → tenant başına adil kuyruk, eşzamanlılık limiti.</td></tr>
+    <tr><td>Rate limit: fail-open vs fail-closed</td><td>Spam Lookup</td><td>Okuma/arama: fail-open. LLM token bütçesi, auth, yazma: fail-closed. Lokal (pod içi) limit + global (Redis) limit.</td></tr>
+    <tr><td>L1 in-process + L2 Redis + singleflight</td><td>Spam Lookup</td><td>Tenant config, kullanıcı grup üyelikleri (ACL), feature flag'ler, JWKS.</td></tr>
+    <tr><td>Backpressure: full resync'i önce kes</td><td>Contact Sync</td><td>Yük altında önce <b>ilk senkronizasyonları</b> yavaşlat, artımlı değişiklikleri ve <b>izin iptallerini</b> asla yavaşlatma.</td></tr>
+    <tr><td>Data residency (home region)</td><td>Contact Sync</td><td>Kurumsal müşteri: EU verisi EU'da. Tenant → region eşlemesi, bölge başına ayrı stack (cell).</td></tr>
+    <tr><td>OIDC, JWT, lokal JWKS doğrulama</td><td>Kurumsal IAM</td><td>Kurumsal SSO (Entra/Okta), servisler arası JWT, <b>tool çağrıları için kullanıcı adına OAuth token</b>.</td></tr>
+    <tr><td>Strangler migration</td><td>Kurumsal IAM</td><td>API versiyon geçişleri, eski sistemden yeni sisteme geçiş, ana şirket sistemleriyle entegrasyon.</td></tr>
+    <tr><td>SLO + operasyonel metrikler</td><td>Hepsi</td><td>Aynen kullan. Buna ek olarak LLM'e özgü metrikler: TTFT, tokens/s, tenant başına maliyet.</td></tr>
+  </table>
+
+  <h2>Stack çeviri tablosu (söylerken buna göre konuş)</h2>
+  <table class="small">
+    <tr><th>Pratik tasarımda</th><th>AI Company / GCP karşılığı</th><th>Not</th></tr>
+    <tr><td>Cassandra</td><td><b>Cloud SQL / AlloyDB Postgres</b> (+ partitioning, read replica)</td><td>Cassandra'yı sadece gerçek bir yazma sınırına ulaşınca öner. Postgres'te <code>tenant_id</code> ile hash partition, RLS.</td></tr>
+    <tr><td>Kafka</td><td><b>Pub/Sub</b> (ordering key, DLQ, retry policy) veya Redis Streams</td><td>Kafka da olur ama "managed + ekibin bildiği" argümanı güçlü. Replay gerekiyorsa Kafka/GCS arşivi.</td></tr>
+    <tr><td>S3 + presigned URL</td><td><b>GCS signed URL</b> (resumable upload)</td><td>Büyük dosya API'yi bloklamasın.</td></tr>
+    <tr><td>Redis</td><td><b>Memorystore Redis</b></td><td>Rate limit, idempotency, cache, event stream.</td></tr>
+    <tr><td>Istio/Envoy, CDN + WAF</td><td><b>Cloud Load Balancing + Cloud Armor</b>, GKE Gateway/Envoy</td><td>WAF, TLS, DDoS, tenant bazlı rate limit.</td></tr>
+    <tr><td>KEDA, HPA</td><td>Aynı (GKE)</td><td>Pub/Sub backlog'a göre KEDA autoscaling.</td></tr>
+    <tr><td>Vault</td><td><b>Secret Manager</b> + Workload Identity</td><td>Pod'da statik key yok.</td></tr>
+    <tr><td>ArgoCD, Prometheus, Grafana, OTel, Loki</td><td>Aynı ya da Cloud Monitoring/Logging/Trace</td><td>Kendi deneyimin, rahat konuş.</td></tr>
+  </table>
+</section>
+
+
+<section class="page">
+  <div class="ph"><span class="t">API tasarımı kopya kağıdı</span><span class="n">3 / 15 · Ezberle</span></div>
+  <div class="cols">
+  <div>
+    <h3>1. Kaynak odaklı URL'ler</h3>
+    <pre>GET    /v1/sources?cursor=..&amp;limit=50   list
+POST   /v1/sources                        create → 201 + Location
+GET    /v1/sources/{id}                   read
+PATCH  /v1/sources/{id}                   partial update
+DELETE /v1/sources/{id}                   → 204 (veya 202 async)
+POST   /v1/sources/{id}/syncs             alt kaynak (sub-resource)
+POST   /v1/tasks/{id}:cancel                  aksiyon (Google AIP stili)</pre>
+    <p class="small">İsimler çoğul, fiil yok. Aksiyon şart ise <code>:cancel</code> veya <code>/cancel</code>. Tenant'ı URL'e koyma, <b>token'dan</b> çıkar (spoofing riski yok).</p>
+
+    <h3>2. Status kodları</h3>
+    <table class="small">
+      <tr><td>200</td><td>OK (GET/PATCH)</td><td>400</td><td>Bozuk istek / validasyon</td></tr>
+      <tr><td>201</td><td>Created + Location</td><td>401</td><td>Kimlik yok / geçersiz</td></tr>
+      <tr><td>202</td><td>Kabul edildi, async</td><td>403</td><td>Yetki yok</td></tr>
+      <tr><td>204</td><td>İçerik yok</td><td>404</td><td>Yok (veya başka tenant'ın! 403 yerine 404 → varlık sızdırma)</td></tr>
+      <tr><td>304</td><td>Not Modified (ETag)</td><td>409</td><td>Çakışma / farklı payload ile aynı idempotency key</td></tr>
+      <tr><td></td><td></td><td>412</td><td>If-Match başarısız (eşzamanlı güncelleme)</td></tr>
+      <tr><td></td><td></td><td>422</td><td>Semantik hata</td></tr>
+      <tr><td></td><td></td><td>429</td><td>Rate limit + Retry-After</td></tr>
+      <tr><td></td><td></td><td>500/503</td><td>Sunucu / geçici; 503 + Retry-After</td></tr>
+    </table>
+
+    <h3>3. Hata formatı (RFC 9457 problem+json)</h3>
+    <pre>{ "type": "https://api.example.com/errors/quota-exceeded",
+  "title": "Token quota exceeded",
+  "status": 429,
+  "detail": "Tenant t_42 used 100% of daily tokens",
+  "code": "QUOTA_EXCEEDED",        // makine için sabit
+  "request_id": "req_9f1c",        // log/trace ile eşleşir
+  "errors": [{"field":"limit","msg":"max 100"}] }</pre>
+
+    <h3>4. Sayfalama: cursor (offset değil)</h3>
+    <pre>GET /v1/documents?limit=50&amp;cursor=eyJpZCI6...
+→ { "data": [...], "next_cursor": "eyJ...", "has_more": true }
+SQL: WHERE (created_at, id) &lt; ($1, $2)
+     ORDER BY created_at DESC, id DESC LIMIT 51</pre>
+    <p class="small">Offset büyük tablolarda yavaş ve araya ekleme olunca kayar. Cursor = opak, base64 (son sıralama anahtarı). Limit'e üst sınır koy.</p>
+  </div>
+  <div>
+    <h3>5. Idempotency</h3>
+    <pre>POST /v1/syncs
+Idempotency-Key: 7c1e-...  (istemci üretir, UUID)
+1) (tenant, key) ara → varsa: aynı hash ise kayıtlı
+   cevabı dön; farklı payload ise 409
+2) yoksa: INSERT ... (UNIQUE tenant_id, key)
+3) işi yap, cevabı kaydet (TTL 24 saat)</pre>
+    <p class="small">PUT/DELETE zaten idempotent. Ağ hatasında istemci <b>aynı key ile</b> exponential backoff + jitter ile tekrar dener.</p>
+
+    <h3>6. Uzun süren işler (LRO)</h3>
+    <pre>POST /v1/sources/c1/syncs → 202
+Location: /v1/syncs/s_77
+{ "id":"s_77", "status":"queued" }
+GET /v1/syncs/s_77 → {status:"running", progress:{done:1200,total:5000}}
+Durumlar: queued → running → succeeded | failed | cancelled</pre>
+    <p class="small">Polling + opsiyonel <b>webhook</b> (HMAC imzalı) veya <b>SSE</b> stream. LLM çıktısı için SSE.</p>
+
+    <h3>7. Eşzamanlı güncelleme</h3>
+    <p class="small"><code>ETag: "v12"</code> → istemci <code>If-Match: "v12"</code> ile PATCH. Uyuşmazsa 412. DB'de <code>UPDATE … WHERE id=$1 AND version=$2</code> (optimistic locking).</p>
+
+    <h3>8. Auth</h3>
+    <ul class="small">
+      <li>Kullanıcı: OIDC (Auth Code + PKCE) → kısa ömürlü JWT access token. Servis lokal JWKS ile doğrular (kurumsal IAM'de olduğu gibi).</li>
+      <li>Makine/entegrasyon: OAuth2 client credentials veya API key (DB'de <b>hash</b>'i, prefix ile tanınır: <code>sk_live_ab12…</code>), <b>scope</b>'lar.</li>
+      <li>Authz: token'da kaba roller; ince izin servis içinde. Her sorguda <code>tenant_id</code> filtresi + Postgres <b>RLS</b>.</li>
+    </ul>
+
+    <h3>9. Rate limit başlıkları</h3>
+    <pre>429 Too Many Requests
+Retry-After: 12
+RateLimit-Limit: 600   RateLimit-Remaining: 0   RateLimit-Reset: 12</pre>
+    <p class="small">Token bucket (Redis + Lua, atomik). Boyutlar: tenant, kullanıcı, API key, endpoint. LLM için <b>token bazlı</b> bütçe.</p>
+
+    <h3>10. Versiyonlama ve evrim</h3>
+    <ul class="small">
+      <li>URL'de major: <code>/v1</code>. Ek alan eklemek <b>kırmaz</b>; alan silmek, anlam değiştirmek, zorunlu alan eklemek kırar.</li>
+      <li>İstemciler bilinmeyen alanları yok saymalı (tolerant reader). Enum'a değer eklemek dikkat ister.</li>
+      <li>Deprecation: <code>Deprecation</code> + <code>Sunset</code> header, kullanım metrikleri, iletişim.</li>
+      <li>Sözleşme önce: <b>OpenAPI</b> spec → codegen, contract test, lint (Spectral) CI'da. (DX cümlesi!)</li>
+    </ul>
+
+    <h3>11. Diğer kontrol listesi</h3>
+    <p class="small">Request ID / trace header (<code>traceparent</code>) · max body size · zaman ISO-8601 UTC · para integer · ID'ler opak string, prefix'li (<code>task_</code>, <code>doc_</code>) · filtre/sıralama parametreleri · <code>fields</code>/<code>expand</code> · gzip · CORS · audit log.</p>
+  </div>
+  </div>
+</section>
+
+
+<section class="page">
+  <div class="ph"><span class="t">Solutions design ve infra kopya kağıdı (AI Company stack'i)</span><span class="n">4 / 15 · Ezberle</span></div>
+  <div class="cols">
+  <div>
+    <h3>GCP yapı taşları</h3>
+    <table class="small">
+      <tr><td><b>GKE</b> (regional)</td><td>Node pool'lar ayrı: api, workers, spot/preemptible (batch embedding). Workload Identity.</td></tr>
+      <tr><td><b>Cloud SQL / AlloyDB</b></td><td>Postgres HA (zonal failover), read replica, PITR backup. PgBouncer.</td></tr>
+      <tr><td><b>Memorystore</b></td><td>Redis: cache, rate limit, idempotency, stream.</td></tr>
+      <tr><td><b>Pub/Sub</b></td><td>At-least-once, ordering key, ack deadline, DLQ topic, retry policy.</td></tr>
+      <tr><td><b>Cloud Tasks / Scheduler</b></td><td>Zamanlanmış/gecikmeli işler, hız sınırlı dispatch.</td></tr>
+      <tr><td><b>GCS</b></td><td>Ham dosya, signed URL, lifecycle kuralları.</td></tr>
+      <tr><td><b>Cloud LB + Cloud Armor</b></td><td>Global L7, TLS, WAF, DDoS, IP allowlist (enterprise).</td></tr>
+      <tr><td><b>Secret Manager / KMS</b></td><td>OAuth token'ları şifreli (envelope encryption), CMEK müşteri anahtarı.</td></tr>
+    </table>
+
+    <h3>Kubernetes: söylenmesi gerekenler</h3>
+    <ul class="small">
+      <li><b>Probes:</b> readiness (trafik al), liveness (yeniden başlat; DB'yi kontrol etme!), startup.</li>
+      <li><b>HPA</b> CPU/RPS'e göre; <b>KEDA</b> kuyruk backlog'una göre. requests/limits, <b>PDB</b>, topology spread (zone).</li>
+      <li><b>Graceful shutdown:</b> SIGTERM → readiness false → preStop sleep → in-flight bitir → <code>terminationGracePeriodSeconds</code>. SSE/uzun bağlantılar için kritik.</li>
+      <li><b>Rollout:</b> rolling + maxUnavailable 0; riskli değişiklikte <b>canary</b> (Argo Rollouts, metrik bazlı otomatik rollback). Feature flag ile deploy ≠ release.</li>
+      <li>NetworkPolicy, namespace per servis/takım, ResourceQuota.</li>
+    </ul>
+
+    <h3>Terraform / IaC</h3>
+    <ul class="small">
+      <li>Modüller (gke-cluster, cloudsql, pubsub-topic+dlq), ortam başına state (GCS backend + lock).</li>
+      <li>PR'da <code>terraform plan</code> yorumu, apply sadece CI'dan (Atlantis / GH Actions + OIDC → Workload Identity Federation, statik key yok).</li>
+      <li>Drift tespiti, policy-as-code (OPA/Conftest). App config: Helm + ArgoCD (GitOps).</li>
+    </ul>
+
+    <h3>Postgres: production ipuçları</h3>
+    <ul class="small">
+      <li>Connection pool (PgBouncer, transaction mode); pod sayısı × pool &lt; max_connections.</li>
+      <li><code>EXPLAIN (ANALYZE, BUFFERS)</code>, <code>pg_stat_statements</code>, eksik index, N+1.</li>
+      <li>Büyük tablolar: partitioning (zaman / tenant hash), autovacuum ayarı, bloat.</li>
+      <li>Online migration: expand → backfill (batch) → contract. <code>CREATE INDEX CONCURRENTLY</code>. Kilitlenen ALTER'a dikkat, <code>lock_timeout</code>.</li>
+      <li>İş kuyruğu: <code>SELECT … FOR UPDATE SKIP LOCKED</code> (pending_events / job tablosu).</li>
+      <li><b>Transactional outbox (pending_events tablosu):</b> DB yazımı + event aynı transaction'da → event publisher Pub/Sub'a basar. "DB'ye yazdım ama event kayboldu" problemi yok.</li>
+      <li>Multi-tenant: <code>tenant_id</code> her tabloda, composite index'te ilk kolon, RLS.</li>
+    </ul>
+  </div>
+  <div>
+    <h3>Redis kalıpları</h3>
+    <ul class="small">
+      <li>Cache-aside + TTL jitter + singleflight (stampede). Negative cache.</li>
+      <li>Rate limit: token bucket Lua script (atomik). Idempotency: <code>SET key val NX EX 86400</code>.</li>
+      <li>Distributed lock: kısa TTL + fencing token (Redlock'a güvenme, kritik iş DB'de).</li>
+      <li>Streams: <code>XADD</code>/<code>XREAD BLOCK</code> → canlı event fan-out, consumer group.</li>
+      <li>Eviction policy, memory alarmı, hot key, persistence kapalı mı açık mı?</li>
+    </ul>
+
+    <h3>Güvenilirlik araç kutusu</h3>
+    <ul class="small">
+      <li><b>Timeout</b> her dış çağrıda (deadline propagation). <b>Retry</b> sadece idempotent işte, exp. backoff + jitter, retry budget.</li>
+      <li><b>Circuit breaker</b> (LLM sağlayıcı, kaynak API'ler), <b>bulkhead</b> (tenant/bağımlılık başına havuz).</li>
+      <li><b>Load shedding</b>: önemsiz işi düşür, önemliyi koru. Kuyrukta <b>öncelik şeritleri</b>.</li>
+      <li>DLQ + alarm + replay aracı. Poison message izolasyonu.</li>
+      <li>Degrade: LLM yoksa arama sonuçları yine dönsün; fallback model.</li>
+    </ul>
+
+    <h3>SRE dili</h3>
+    <ul class="small">
+      <li><b>SLI</b> (ölçülen) → <b>SLO</b> (hedef, ör. 99.9% / 30 gün = ~43 dk hata bütçesi) → <b>error budget</b> politikası (bütçe bitti → feature freeze, güvenilirlik işi).</li>
+      <li>Alarm <b>semptoma</b> göre (burn rate, multi-window: 1h &amp; 6h), sebebe göre değil. Her alarmın runbook'u var.</li>
+      <li>RED (Rate, Errors, Duration) servisler için; USE (Utilization, Saturation, Errors) kaynaklar için.</li>
+      <li>Incident: tespit → IC atanır → mitigate (rollback önce!) → iletişim → blameless postmortem → action item.</li>
+      <li>OTel trace: <code>tenant_id</code>, <code>task_id</code> span attribute. Log'da PII yok.</li>
+    </ul>
+
+    <h3>Back-of-envelope ezber sayıları</h3>
+    <table class="small">
+      <tr><td>1 gün</td><td>86.400 sn ≈ <b>10<sup>5</sup></b></td></tr>
+      <tr><td>1M istek/gün</td><td>≈ 12 rps ort., tepe ×3-5</td></tr>
+      <tr><td>Little's law</td><td>eşzamanlı = rps × süre (120 rps × 20 sn = 2.400 açık stream)</td></tr>
+      <tr><td>Redis</td><td>~100k ops/sn/node, &lt;1 ms</td></tr>
+      <tr><td>Postgres (iyi index)</td><td>~5-20k basit sorgu/sn/primary; tek satır okuma ~1 ms</td></tr>
+      <tr><td>Aynı bölge ağ RTT</td><td>~0,5 ms; EU↔US ~80-100 ms</td></tr>
+      <tr><td>LLM çağrısı</td><td>TTFT 0,3-2 sn; tam cevap 2-30 sn → <b>her zaman async/stream</b></td></tr>
+      <tr><td>Embedding vektörü</td><td>768 float32 ≈ 3 KB; 1536 ≈ 6 KB</td></tr>
+      <tr><td>1 sayfa metin</td><td>~500 token ≈ 2 KB</td></tr>
+      <tr><td>99.9% / 99.99%</td><td>ayda ~43 dk / ~4,3 dk kesinti</td></tr>
+    </table>
+
+    <h3>Gereksinim soruları bankası</h3>
+    <p class="small">Kim kullanıyor (UI / 3. parti / iç servis)? Kaç tenant, en büyüğü ne kadar? Okuma:yazma oranı? Latency hedefi? Tutarlılık: hemen mi, saniyeler mi? Veri hassas mı (PII, residency)? Silme/GDPR? Multi-region? Mevcut sistemlerle entegrasyon? Maliyet hassasiyeti (LLM token!)?</p>
+  </div>
+  </div>
+</section>
+
+
+<section class="page">
+  <div class="ph"><span class="t">Senaryo A · Knowledge Sync Platform</span><span class="n">5 / 15 · A 1/3</span></div>
+  <p class="muted small">Contact Sync'in kardeşi: yazma ağırlıklı, async pipeline. Agent ürününün kalbi: "access all your company's apps, knowledge and data".</p>
+
+  <div class="box"><b>Mülakatçı:</b> <span class="say">"Our agent product lets enterprises connect sources like Google Drive, Confluence, SharePoint and Slack, so agents can answer questions using company knowledge. Design the API and the backend that keeps these sources in sync and makes the content searchable. Focus on the API and how you would run it in production."</span></div>
+
+  <div class="cols">
+  <div>
+    <h3>Sorulacak netleştirme soruları</h3>
+    <ol class="small">
+      <li>API'yi kim kullanıyor? (Admin UI, agent runtime, müşteri entegrasyonları?)</li>
+      <li>Kaç tenant, en büyük tenant kaç doküman? Değişim oranı?</li>
+      <li>Ne kadar taze olmalı? (Yeni doküman kaç dakikada aranabilir?)</li>
+      <li><b>İzinler:</b> kullanıcı sadece kaynakta görebildiğini mi görmeli? (Evet → kritik.)</li>
+      <li>Silme / erişim iptali ne kadar hızlı yansımalı?</li>
+      <li>Kaynak API'lerin kota/limitleri? Webhook desteği var mı?</li>
+      <li>Data residency (EU tenant verisi EU'da)?</li>
+      <li>Embedding/LLM maliyeti bir kısıt mı?</li>
+    </ol>
+
+    <h3>Gereksinimler</h3>
+    <p class="small"><b>Fonksiyonel:</b> (1) Admin bir kaynağı bağlar (OAuth) ve kapsamı seçer. (2) İlk tam senkronizasyon + sonra artımlı. (3) Senkronizasyon durumu/hataları görünür. (4) Agent/kullanıcı <b>izin farkındalıklı</b> arama yapar. (5) Bağlantı silinince tüm veri temizlenir.</p>
+    <p class="small"><b>Fonksiyonel olmayan:</b> Artımlı tazelik p95 &lt; 10 dk · izin iptali p99 &lt; 5 dk · arama p95 &lt; 300 ms · API %99.9 · <b>sıfır tenant'lar arası sızıntı</b> · tenant'lar arası adalet · maliyet kontrolü.</p>
+    <p class="small"><b>Kapsam dışı:</b> LLM cevap üretimi (Senaryo B), billing, source UI.</p>
+  </div>
+  <div>
+    <h3>Back-of-envelope</h3>
+    <table class="small">
+      <tr><td>Tenant</td><td>500 kurumsal müşteri</td></tr>
+      <tr><td>Doküman</td><td>ort. 300k / tenant → <b>150M doküman</b>; en büyük tenant 5M</td></tr>
+      <tr><td>Değişim</td><td>günde %1 → 1,5M/gün ≈ <b>17/sn ort.</b>, mesai tepesi ×5 ≈ 90/sn</td></tr>
+      <tr><td>Onboarding dalgası</td><td>Büyük tenant: 5M doküman, 24 saatte bitsin → ~60 doc/sn <b>tek tenant</b> için</td></tr>
+      <tr><td>Chunk</td><td>ort. 6 chunk/doküman → 900M chunk</td></tr>
+      <tr><td>Vektör</td><td>900M × 3 KB (768 dim) ≈ <b>2,7 TB</b> + metin ~2 TB</td></tr>
+      <tr><td>Embedding</td><td>Artımlı: 1,5M × 6 = 9M chunk/gün (hash ile değişmeyenler atlanınca daha az)</td></tr>
+      <tr><td>Arama</td><td>200k DAU × 20 sorgu = 4M/gün ≈ 50 rps ort., tepe ~250 rps</td></tr>
+    </table>
+    <p class="small"><b>Çıkarım:</b> Darboğaz QPS değil; <b>kaynak API kotaları, embedding maliyeti ve tenant adaleti</b>. Bunu söylemek kıdem gösterir.</p>
+
+    <h3>Kaynaklar (resources)</h3>
+    <p class="small"><code>Source</code> (tenant'ın bağlı kaynağı) · <code>SyncRun</code> (bir senkronizasyon işi, LRO) · <code>Document</code> (indekslenmiş öğe) · <code>SearchQuery</code> (aksiyon) · <code>Webhook</code> (kaynaktan gelen bildirim)</p>
+
+    <div class="tip small"><b>Açılış cümlesi:</b> <span class="say">"The interesting problems here are not QPS. They're permission correctness, fairness between tenants, source API quotas, and embedding cost. I'll design the API first, then the pipeline around those four."</span></div>
+  </div>
+  </div>
+  <div class="cols">
+    <div class="box small"><h4>Basit v1 (önce bunu çiz, 5 dk)</h4>
+      Knowledge Sources API (Go, stateless) + Postgres (sources, sync_runs, documents, chunks + pgvector) + bir Pub/Sub topic + tek worker deployment. Webhook yok: her N dakikada delta token ile <b>poll</b>. Arama: Postgres'te ACL filtresi + vektör sorgusu.<br>
+      <span class="say">"That's v1. The things that break first at scale are source quotas, one big tenant starving the others, and permission freshness. Which one should I go into?"</span></div>
+    
+  </div>
+</section>
+
+
+<section class="page">
+  <div class="ph"><span class="t">Senaryo A · API sözleşmesi ve veri modeli</span><span class="n">6 / 15 · A 2/3</span></div>
+  <h3>Endpoint'ler</h3>
+  <table class="small">
+    <tr><th style="width:36%">Endpoint</th><th style="width:16%">Cevap</th><th>Not</th></tr>
+    <tr><td><code>POST /v1/sources</code></td><td>201</td><td><code>{type:"google_drive", auth:{oauth_code}, scope:{folders:[…]}}</code>. Token'ı Secret Manager'a/KMS ile şifreli DB'ye koy, cevapta asla dönme.</td></tr>
+    <tr><td><code>GET /v1/sources?cursor=&amp;limit=</code></td><td>200</td><td>Liste, <code>status</code>: active | paused | auth_error | deleting.</td></tr>
+    <tr><td><code>PATCH /v1/sources/{id}</code></td><td>200 / 412</td><td>Kapsam değiştir, durdur. <code>If-Match</code> ile.</td></tr>
+    <tr><td><code>DELETE /v1/sources/{id}</code></td><td><b>202</b></td><td>Veri temizliği async; status=deleting. Arama hemen hariç tutar.</td></tr>
+    <tr><td><code>POST /v1/sources/{id}/syncs</code></td><td><b>202</b> + Location</td><td><code>Idempotency-Key</code>. <code>{mode:"incremental"|"full"}</code>. Zaten çalışan varsa: <b>mevcut run'ı 200 ile dön</b> (veya 409, seçimini söyle).</td></tr>
+    <tr><td><code>GET /v1/syncs/{id}</code></td><td>200</td><td>LRO durumu + ilerleme + hata özeti.</td></tr>
+    <tr><td><code>POST /v1/syncs/{id}:cancel</code></td><td>202</td><td>Kooperatif iptal: worker her sayfada kontrol eder.</td></tr>
+    <tr><td><code>GET /v1/sources/{id}/documents?status=failed</code></td><td>200</td><td>Hangi doküman neden başarısız? (Destek ve DX için.)</td></tr>
+    <tr><td><code>POST /v1/hooks/{source}</code></td><td>204</td><td>Kaynaktan gelen değişim bildirimi. <b>İmza doğrula</b>, hemen kuyruğa at, 1 sn içinde dön.</td></tr>
+    <tr><td><code>POST /v1/search</code></td><td>200</td><td><b>Kullanıcı token'ı</b> ile. <code>{query, top_k, filters:{source_ids, updated_after}}</code> → sonuçlar + atıf (url, başlık, parça).</td></tr>
+  </table>
+
+  <div class="cols">
+  <div>
+    <h4>Örnek: sync başlat</h4>
+<pre>POST /v1/sources/src_8f2/syncs
+Authorization: Bearer eyJ…      (tenant = token'dan)
+Idempotency-Key: 3b6c9d0e-…
+{ "mode": "incremental" }
+
+202 Accepted
+Location: /v1/syncs/syn_51a
+{ "id": "syn_51a", "source_id": "src_8f2",
+  "mode": "incremental", "status": "queued",
+  "created_at": "2026-11-06T09:12:03Z" }</pre>
+    <h4>Örnek: durum</h4>
+<pre>GET /v1/syncs/syn_51a → 200
+{ "id":"syn_51a", "status":"running",
+  "progress": {"discovered":5200,"processed":3100,
+               "skipped_unchanged":2400,"failed":7},
+  "started_at":"…", "last_error": null }</pre>
+  </div>
+  <div>
+    <h4>Örnek: arama</h4>
+<pre>POST /v1/search
+{ "query": "parental leave policy Sweden", "top_k": 8 }
+200
+{ "results": [
+   { "document_id":"doc_19c", "title":"Leave Policy SE",
+     "url":"https://drive.google.com/…", "score":0.82,
+     "snippet":"…480 days of parental leave…",
+     "source":"google_drive", "updated_at":"…" } ],
+  "request_id":"req_77" }</pre>
+    <p class="small">Durum makinesi (SyncRun): <code>queued → running → succeeded | failed | cancelled</code>. Geçişler tek yerde, DB'de <code>UPDATE … WHERE status='running'</code> ile korunur.</p>
+  </div>
+  </div>
+
+  <h3>Veri modeli (Postgres, her tabloda tenant_id + RLS)</h3>
+<pre>sources (tenant_id, id PK, type, status, scope jsonb, secret_ref, delta_cursor text,
+            version int, created_at)
+sync_runs  (tenant_id, id PK, source_id, mode, status, discovered, processed, failed,
+            idempotency_key, started_at, finished_at,
+            UNIQUE(tenant_id, idempotency_key),
+            UNIQUE(source_id) WHERE status IN ('queued','running'))   -- 1 aktif run
+documents  (tenant_id, id PK, source_id, external_id, title, url, content_hash,
+            source_version bigint, acl_version bigint, deleted_at, updated_at,
+            UNIQUE(source_id, external_id))
+document_acl (tenant_id, document_id, principal_id)  -- user / group / "domain:acme.com"
+chunks     (tenant_id, document_id, chunk_no, text, embedding vector(768), PK(document_id, chunk_no))
+-- partition: HASH(tenant_id); büyük tenant → ayrı partition / ayrı vektör index'i</pre>
+  <p class="small"><b>Neden partial unique index?</b> Aynı kaynak için aynı anda iki sync çalışmasını DB garanti eder; uygulama yarışı (race) olsa bile. <b>Vektör:</b> başlangıçta <b>pgvector</b> (HNSW) — operasyonel tek sistem; büyük tenant'lar veya &gt;birkaç yüz milyon vektörde ayrı vektör DB'ye (Vertex AI Vector Search vb.) geçiş planı. Trade-off'u söyle.</p>
+</section>
+
+
+<section class="page">
+  <div class="ph"><span class="t">Senaryo A · Mimari ve derin dalışlar</span><span class="n">7 / 15 · A 3/3</span></div>
+  <svg viewBox="0 0 760 270" width="100%" xmlns="http://www.w3.org/2000/svg">
+    <defs><marker id="a" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#111"/></marker></defs>
+    <g font-size="10" fill="#111" stroke="#111">
+      <rect x="5" y="20" width="80" height="40" fill="#fff"/><text x="45" y="38" text-anchor="middle" stroke="none">Admin UI /</text><text x="45" y="51" text-anchor="middle" stroke="none">Agent runtime</text>
+      <rect x="5" y="150" width="80" height="40" fill="#fff"/><text x="45" y="168" text-anchor="middle" stroke="none">Kaynaklar</text><text x="45" y="181" text-anchor="middle" stroke="none">Drive, Slack…</text>
+      <rect x="110" y="20" width="95" height="40" fill="#eee"/><text x="157" y="36" text-anchor="middle" stroke="none">Cloud LB + Armor</text><text x="157" y="50" text-anchor="middle" stroke="none">Gateway: JWT, RL</text>
+      <rect x="230" y="10" width="110" height="60" fill="#fff" stroke-width="2"/><text x="285" y="28" text-anchor="middle" stroke="none" font-weight="bold">Sources API</text><text x="285" y="42" text-anchor="middle" stroke="none">stateless, GKE, HPA</text><text x="285" y="56" text-anchor="middle" stroke="none">idempotency, pending_events</text>
+      <rect x="230" y="95" width="110" height="40" fill="#fff"/><text x="285" y="112" text-anchor="middle" stroke="none" font-weight="bold">Search API</text><text x="285" y="126" text-anchor="middle" stroke="none">ACL pre-filter</text>
+      <rect x="230" y="150" width="110" height="40" fill="#fff"/><text x="285" y="167" text-anchor="middle" stroke="none">Webhook receiver</text><text x="285" y="181" text-anchor="middle" stroke="none">imza doğrula → 204</text>
+      <rect x="380" y="10" width="120" height="50" fill="#eee"/><text x="440" y="28" text-anchor="middle" stroke="none" font-weight="bold">Postgres (Cloud SQL)</text><text x="440" y="42" text-anchor="middle" stroke="none">sources, syncs, docs</text><text x="440" y="54" text-anchor="middle" stroke="none">acl, chunks+pgvector</text>
+      <rect x="380" y="85" width="120" height="40" fill="#eee"/><text x="440" y="102" text-anchor="middle" stroke="none" font-weight="bold">Redis</text><text x="440" y="116" text-anchor="middle" stroke="none">RL buckets, grup cache</text>
+      <rect x="380" y="150" width="120" height="40" fill="#ddd"/><text x="440" y="166" text-anchor="middle" stroke="none" font-weight="bold">Pub/Sub</text><text x="440" y="180" text-anchor="middle" stroke="none">sync-jobs · doc-changes</text>
+      <rect x="540" y="10" width="110" height="55" fill="#fff" stroke-width="2"/><text x="595" y="27" text-anchor="middle" stroke="none" font-weight="bold">Crawler workers</text><text x="595" y="41" text-anchor="middle" stroke="none">değişiklikleri listele</text><text x="595" y="55" text-anchor="middle" stroke="none">cursor checkpoint</text>
+      <rect x="540" y="90" width="110" height="65" fill="#fff" stroke-width="2"/><text x="595" y="107" text-anchor="middle" stroke="none" font-weight="bold">Processor workers</text><text x="595" y="121" text-anchor="middle" stroke="none">fetch, hash, extract</text><text x="595" y="135" text-anchor="middle" stroke="none">chunk, embed, upsert</text><text x="595" y="149" text-anchor="middle" stroke="none">KEDA (backlog)</text>
+      <rect x="540" y="180" width="110" height="40" fill="#fff"/><text x="595" y="197" text-anchor="middle" stroke="none">ACL / Purge worker</text><text x="595" y="211" text-anchor="middle" stroke="none">öncelikli şerit</text>
+      <rect x="675" y="10" width="80" height="55" fill="#eee"/><text x="715" y="28" text-anchor="middle" stroke="none">Embedding</text><text x="715" y="42" text-anchor="middle" stroke="none">servisi</text><text x="715" y="56" text-anchor="middle" stroke="none">(batch)</text>
+      <rect x="675" y="90" width="80" height="40" fill="#eee"/><text x="715" y="108" text-anchor="middle" stroke="none">GCS</text><text x="715" y="121" text-anchor="middle" stroke="none">ham içerik</text>
+      <rect x="380" y="215" width="120" height="35" fill="#fff"/><text x="440" y="236" text-anchor="middle" stroke="none">Secret Manager (OAuth)</text>
+      <line x1="85" y1="40" x2="108" y2="40" marker-end="url(#a)"/>
+      <line x1="205" y1="40" x2="228" y2="40" marker-end="url(#a)"/>
+      <line x1="205" y1="50" x2="228" y2="110" marker-end="url(#a)"/>
+      <line x1="85" y1="170" x2="228" y2="170" marker-end="url(#a)"/>
+      <line x1="340" y1="35" x2="378" y2="35" marker-end="url(#a)"/>
+      <line x1="340" y1="60" x2="378" y2="160" marker-end="url(#a)"/>
+      <line x1="340" y1="170" x2="378" y2="170" marker-end="url(#a)"/>
+      <line x1="340" y1="115" x2="378" y2="110" marker-end="url(#a)"/>
+      <line x1="340" y1="110" x2="378" y2="45" marker-end="url(#a)"/>
+      <line x1="500" y1="160" x2="538" y2="45" marker-end="url(#a)"/>
+      <line x1="500" y1="170" x2="538" y2="125" marker-end="url(#a)"/>
+      <line x1="500" y1="180" x2="538" y2="200" marker-end="url(#a)"/>
+      <line x1="595" y1="65" x2="595" y2="88" marker-end="url(#a)"/>
+      <line x1="650" y1="105" x2="673" y2="45" marker-end="url(#a)"/>
+      <line x1="650" y1="120" x2="673" y2="110" marker-end="url(#a)"/>
+      <line x1="540" y1="140" x2="502" y2="50" marker-end="url(#a)" stroke-dasharray="3,2"/>
+      <line x1="540" y1="30" x2="502" y2="100" marker-end="url(#a)" stroke-dasharray="3,2"/>
+      <line x1="100" y1="160" x2="540" y2="35" stroke="#888" stroke-dasharray="2,3"/>
+      <text x="300" y="262" stroke="none" font-size="9">Kesikli: DB yazımı / Redis rate limit. Gri: crawler kaynak API'yi çağırır (tenant+kaynak başına token bucket).</text>
+    </g>
+  </svg>
+
+  <div class="cols">
+  <div>
+    <h3>Akışlar</h3>
+    <p class="small"><b>Sync:</b> API → <code>sync_runs</code> INSERT + pending_events (aynı txn) → event publisher → <code>sync-jobs</code> → Crawler: kaynaktan sayfa sayfa değişiklik listesi (delta token), her sayfadan sonra <b>cursor checkpoint</b> (crash olursa kaldığı yerden) → her değişiklik <code>doc-changes</code> (ordering key = document_id) → Processor.</p>
+    <p class="small"><b>Processor:</b> içeriği çek → <code>content_hash</code> aynı mı? <b>Aynıysa embedding yok</b>, sadece metadata/ACL güncelle → farklıysa chunk + batch embed → tek transaction'da eski chunk'ları sil + yenileri yaz + <code>documents</code> upsert <code>WHERE excluded.source_version &gt; source_version</code>.</p>
+    <p class="small"><b>Webhook:</b> imza doğrula, 204 dön, sadece "bu doküman değişti" bilgisini kuyruğa at (payload'a güvenme, kaynaktan tekrar çek).</p>
+    <p class="small"><b>İzin iptali / silme:</b> ayrı <b>yüksek öncelikli</b> topic + worker. Re-embed yok, sadece <code>document_acl</code> / <code>deleted_at</code>. Arama hemen etkilenir.</p>
+
+    <h3>Derin dalış 1 · İzin doğruluğu (en önemli)</h3>
+    <ul class="small">
+      <li>Arama: kullanıcının principal kümesi = user_id + grupları (IdP / kaynaktan, Redis'te 5 dk cache). Sorgu <b>önce</b> ACL ile filtreler, sonra vektör benzerliği (pre-filter). Post-filter → top_k boş kalabilir ve sızıntı riski.</li>
+      <li><b>Fail-closed:</b> ACL bilinmiyorsa dokümanı gösterme. Grup servisi çökerse: son bilinen cache, o da yoksa hata.</li>
+      <li>Periyodik <b>reconciliation</b> job: kaynaktaki ACL ile karşılaştır (webhook'lar kaçabilir).</li>
+      <li>Tenant izolasyonu: RLS + her sorguda tenant_id + entegrasyon testi "tenant A token'ı ile B'nin dokümanı 404".</li>
+    </ul>
+  </div>
+  <div>
+    <h3>Derin dalış 2 · Kaynak kotaları ve backoff</h3>
+    <ul class="small">
+      <li>Redis token bucket: <code>(tenant, source)</code> başına; kaynağın kotasına göre ayarlı. 429 → <code>Retry-After</code>'a uy, run'ı "throttled" işaretle, mesajı gecikmeli tekrar kuyruğa koy (worker'ı uyutma).</li>
+      <li>Kaynak başına circuit breaker: Confluence çökerse Drive senkronu etkilenmez (bulkhead).</li>
+      <li>OAuth token süresi dolarsa: refresh; refresh başarısızsa source <code>auth_error</code>, admin'e bildirim, run'lar durur.</li>
+    </ul>
+    <h3>Derin dalış 3 · Noisy neighbor (hot tenant)</h3>
+    <ul class="small">
+      <li>Spam Lookup tasarımındaki "hot number"ın karşılığı. Büyük tenant onboard olurken 5M doküman kuyruğu doldurur.</li>
+      <li>Çözüm: iki şerit: <b>backfill</b> (ilk sync) ve <b>live</b> (artımlı + ACL). Tenant başına eşzamanlılık limiti (ör. max 20 worker slot). Fair scheduling: job tablosundan round-robin tenant seçimi (<code>FOR UPDATE SKIP LOCKED</code>).</li>
+      <li>Embedding: backfill için spot node pool + batch API (daha ucuz), live için düşük gecikmeli yol.</li>
+    </ul>
+    <h3>Hata senaryoları</h3>
+    <table class="small">
+      <tr><td>Worker crash</td><td>Pub/Sub ack gelmez → tekrar teslim. Upsert idempotent (deterministik PK).</td></tr>
+      <tr><td>Bozuk dosya (poison)</td><td>N deneme → DLQ, doküman <code>failed</code>, run devam eder.</td></tr>
+      <tr><td>Postgres failover</td><td>~30-60 sn yazma hatası → worker'lar retry, API 503 + Retry-After. Arama read replica'dan devam.</td></tr>
+      <tr><td>Embedding sağlayıcı çöktü</td><td>Circuit breaker, kuyruk birikir (tazelik SLO'su yanar, veri kaybı yok), alarm.</td></tr>
+      <tr><td>Kötü deploy</td><td>Canary + otomatik rollback; GCS'te ham içerik → yeniden işleme (replay).</td></tr>
+    </table>
+    <h3>SLO ve alarmlar</h3>
+    <p class="small">API availability 99.9% · artımlı tazelik p95 &lt; 10 dk · ACL iptali p99 &lt; 5 dk · arama p95 &lt; 300 ms. <b>Metrikler:</b> backlog yaşı (en eski mesaj), tenant başına lag, DLQ oranı, 429 oranı (kaynak bazlı), embedding maliyeti/tenant, "skipped_unchanged" oranı.</p>
+  </div>
+  </div>
+</section>
+
+
+<section class="page">
+  <div class="ph"><span class="t">Senaryo B · Agent Tasks API (streaming, tool calls)</span><span class="n">8 / 15 · B 1/3</span></div>
+  <p class="muted small">Spam Lookup'ın kardeşi: gecikmeye duyarlı, okuma/stream ağırlıklı, rate limit kritik. Bu sefer pahalı kaynak Cassandra değil <b>LLM token'ı</b>.</p>
+
+  <div class="box"><b>Mülakatçı:</b> <span class="say">"Users talk to our agents from the web app, Slack, and through a public API. An agent task can call tools like search, Salesforce or Jira and can take from a few seconds to several minutes. Users want to see the answer streaming. Design the API and the system behind it."</span></div>
+
+  <div class="cols">
+  <div>
+    <h3>Netleştirme soruları</h3>
+    <ol class="small">
+      <li>İstemciler: web (stream ister), Slack bot (mesaj güncelleme), 3. parti (webhook ister)?</li>
+      <li>Bir task en fazla ne kadar sürer? İnsan onayı (tool approval) var mı?</li>
+      <li>Kullanıcı bağlantıyı kaybedince task devam etmeli mi? (Evet.)</li>
+      <li>LLM sağlayıcıları: biri mi, birden fazla mı? Tenant başına kota/limit?</li>
+      <li>Tool'lar yazma yapıyor mu (Jira ticket aç)? → <b>tekrar edilmemeli</b>.</li>
+      <li>Konuşma geçmişi ne kadar saklanıyor? Residency?</li>
+    </ol>
+    <h3>Gereksinimler</h3>
+    <p class="small"><b>Fonksiyonel:</b> task başlat, canlı token/olay akışı, kopunca kaldığı yerden devam, iptal, durum sorgulama, geçmiş, async mod + webhook, tool onayı.</p>
+    <p class="small"><b>Fonksiyonel olmayan:</b> ilk olay (TTFT, model hariç overhead) p95 &lt; 500 ms · stream kopsa da <b>task kaybolmaz</b> · tool yan etkileri en fazla 1 kez · tenant başına token bütçesi · deploy'lar task'ları öldürmez · %99.9.</p>
+  </div>
+  <div>
+    <h3>Back-of-envelope</h3>
+    <table class="small">
+      <tr><td>Kullanıcı</td><td>200k DAU × 10 task/gün = <b>2M task/gün</b></td></tr>
+      <tr><td>Hız</td><td>≈ 23 task/sn ort.; 09:00 CET tepe ×5 ≈ <b>120 task/sn</b></td></tr>
+      <tr><td>Süre</td><td>ort. 20 sn → Little: 120 × 20 = <b>~2.400 eşzamanlı stream</b> (uzun kuyrukla ~10k planla)</td></tr>
+      <tr><td>LLM çağrısı</td><td>~3 çağrı/task × (8k giriş + 500 çıkış token) ≈ 25k token/task</td></tr>
+      <tr><td>Token/gün</td><td>2M × 25k = <b>50B token/gün</b> → maliyet ve sağlayıcı limiti asıl kısıt</td></tr>
+      <tr><td>Olaylar</td><td>~300 olay/task (token delta'ları) × 120/sn = 36k olay/sn tepe → Redis Streams rahat</td></tr>
+      <tr><td>Depolama</td><td>2M task × ~20 KB = 40 GB/gün (mesajlar + tool sonuçları)</td></tr>
+    </table>
+    <p class="small"><b>Çıkarım:</b> CPU değil; <b>uzun açık bağlantılar</b>, <b>LLM kotası</b> ve <b>dayanıklı yürütme</b> (crash/deploy sonrası devam) zor kısımlar.</p>
+
+    <h3>Kaynaklar</h3>
+    <p class="small"><code>Conversation</code> · <code>Message</code> · <code>Task</code> (LRO, durum makinesi) · <code>TaskEvent</code> (sıralı, <code>seq</code>'li) · <code>ToolCall</code></p>
+    <h3>Task durum makinesi</h3>
+<pre>queued → running ⇄ requires_action (tool onayı bekliyor)
+running → completed | failed | cancelled | expired
+(terminal durumlardan çıkış yok; geçişler tek fonksiyonda)</pre>
+    <div class="tip small"><b>Ana fikir:</b> <span class="say">"I want to separate the connection that streams to the client from the process that executes the task. Then a dropped connection or a deploy doesn't kill the task, and the client can resume from the last event it saw."</span></div>
+  </div>
+  </div>
+  <div class="cols">
+    <div class="box small"><h4>Basit v1 (önce bunu çiz, 5 dk)</h4>
+      Agent Tasks API + Postgres (tasks, messages) + kuyruk + agent worker'ları. İstemci önce <b>polling</b> yapar: <code>POST /tasks</code> → 202, <code>GET /tasks/{id}</code>. Sonra 2. adım: SSE + Redis stream ile canlı akış ve kaldığı yerden devam.<br>
+      <span class="say">"I'd ship polling first because it's simple and robust, then add streaming once the task lifecycle is solid."</span></div>
+    
+  </div>
+</section>
+
+
+<section class="page">
+  <div class="ph"><span class="t">Senaryo B · API sözleşmesi</span><span class="n">9 / 15 · B 2/3</span></div>
+  <table class="small">
+    <tr><th style="width:40%">Endpoint</th><th style="width:20%">Cevap</th><th>Not</th></tr>
+    <tr><td><code>POST /v1/conversations</code></td><td>201</td><td><code>{agent_id, metadata}</code></td></tr>
+    <tr><td><code>POST /v1/conversations/{id}/tasks</code></td><td>200 SSE <i>veya</i> 202</td><td><code>{input, stream:true|false, webhook_url?}</code> + <code>Idempotency-Key</code>. <code>Accept: text/event-stream</code> → stream, yoksa 202 + Location.</td></tr>
+    <tr><td><code>GET /v1/tasks/{id}</code></td><td>200</td><td>Durum, kullanım (token), sonuç mesajı.</td></tr>
+    <tr><td><code>GET /v1/tasks/{id}/events</code></td><td>200 SSE</td><td><b>Devam etme:</b> <code>Last-Event-ID: 41</code> header'ı veya <code>?after=41</code> → 42'den itibaren.</td></tr>
+    <tr><td><code>POST /v1/tasks/{id}:cancel</code></td><td>202</td><td>İdempotent; terminal ise 200 mevcut durum.</td></tr>
+    <tr><td><code>POST /v1/tasks/{id}/tool_approvals</code></td><td>200 / 409</td><td><code>{tool_call_id, decision:"approve"|"reject"}</code>. Durum requires_action değilse 409.</td></tr>
+    <tr><td><code>GET /v1/conversations/{id}/messages?cursor=</code></td><td>200</td><td>Geçmiş, cursor sayfalama.</td></tr>
+  </table>
+
+  <div class="cols">
+  <div>
+    <h4>SSE akışı (wire format)</h4>
+<pre>HTTP/1.1 200 OK
+Content-Type: text/event-stream
+Cache-Control: no-cache
+X-Task-Id: task_7d2
+
+id: 1
+event: task.started
+data: {"task_id":"task_7d2","status":"running"}
+
+id: 2
+event: tool_call.started
+data: {"tool_call_id":"tc_1","tool":"search",
+       "args":{"query":"Q3 churn"}}
+
+id: 3
+event: tool_call.completed
+data: {"tool_call_id":"tc_1","status":"ok","ms":640}
+
+id: 4
+event: message.delta
+data: {"text":"Q3 churn was "}
+
+: keep-alive   (15 sn'de bir yorum satırı, proxy timeout'una karşı)
+
+id: 57
+event: task.completed
+data: {"usage":{"input_tokens":24180,"output_tokens":512}}</pre>
+  </div>
+  <div>
+    <h4>Neden SSE (WebSocket değil)?</h4>
+    <ul class="small">
+      <li>Akış tek yönlü (sunucu → istemci); girdi zaten ayrı POST'larla geliyor.</li>
+      <li>Düz HTTP: LB, gateway, auth, HTTP/2 multiplexing ile sorunsuz.</li>
+      <li><code>id:</code> + <code>Last-Event-ID</code> ile <b>yerleşik devam</b> mekanizması.</li>
+      <li>WebSocket: çift yönlü gerçek zaman (ses, ortak düzenleme) gerekirse.</li>
+    </ul>
+    <h4>Async mod (entegrasyonlar)</h4>
+<pre>POST /v1/conversations/cv_1/tasks   {stream:false,
+  "webhook_url":"https://customer.com/hooks"}
+→ 202 { "id":"task_7d2","status":"queued" }
+… sonra webhook:
+POST https://customer.com/hooks
+Example-Signature: t=1730880000,v1=hmac_sha256(...)
+{ "type":"task.completed","task_id":"task_7d2", … }</pre>
+    <p class="small">Webhook: HMAC imza + timestamp (replay koruması), exp. backoff ile 24 saat retry, DLQ, müşteri için "redeliver" endpoint'i.</p>
+
+    <h4>Hata ve kota cevapları</h4>
+<pre>429 { "code":"TOKEN_BUDGET_EXCEEDED",
+      "detail":"Tenant daily token budget used",
+      "retry_after_s": 3600 }
+409 { "code":"TASK_ALREADY_ACTIVE" }   // aynı konuşmada 1 aktif task
+422 { "code":"AGENT_TOOL_NOT_CONNECTED",
+      "detail":"Link Jira first" }</pre>
+    <p class="small"><b>Konuşma başına tek aktif task</b>: <code>UNIQUE(conversation_id) WHERE status IN ('queued','running','requires_action')</code>. Mesaj sırası bozulmaz.</p>
+  </div>
+  </div>
+
+  <h3>Veri modeli</h3>
+<pre>tasks       (tenant_id, id PK, conversation_id, agent_id, status, idempotency_key, lease_owner, lease_until,
+            checkpoint jsonb, input_tokens, output_tokens, error, created_at, finished_at)
+messages   (tenant_id, id PK, conversation_id, task_id, role, content jsonb, created_at)
+tool_calls (tenant_id, id PK, task_id, tool, args jsonb, status, result_ref, side_effect_key UNIQUE)
+Redis:  stream  task:{id}:events (XADD, MAXLEN ~5000, TTL 24h)   ·   bucket  tokens:{tenant}</pre>
+</section>
+
+
+<section class="page">
+  <div class="ph"><span class="t">Senaryo B · Mimari ve derin dalışlar</span><span class="n">10 / 15 · B 3/3</span></div>
+  <svg viewBox="0 0 760 215" width="100%" xmlns="http://www.w3.org/2000/svg">
+    <defs><marker id="b" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#111"/></marker></defs>
+    <g font-size="10" fill="#111" stroke="#111">
+      <rect x="5" y="70" width="75" height="45" fill="#fff"/><text x="42" y="88" text-anchor="middle" stroke="none">Web / Slack</text><text x="42" y="102" text-anchor="middle" stroke="none">/ API client</text>
+      <rect x="100" y="70" width="90" height="45" fill="#eee"/><text x="145" y="87" text-anchor="middle" stroke="none">LB + Gateway</text><text x="145" y="101" text-anchor="middle" stroke="none">JWT, req. RL</text>
+      <rect x="210" y="55" width="115" height="75" fill="#fff" stroke-width="2"/><text x="267" y="73" text-anchor="middle" stroke="none" font-weight="bold">Agent Tasks API</text><text x="267" y="88" text-anchor="middle" stroke="none">stateless, HPA</text><text x="267" y="102" text-anchor="middle" stroke="none">SSE'yi tutar</text><text x="267" y="116" text-anchor="middle" stroke="none">XREAD BLOCK</text>
+      <rect x="350" y="5" width="115" height="40" fill="#eee"/><text x="407" y="22" text-anchor="middle" stroke="none" font-weight="bold">Postgres</text><text x="407" y="36" text-anchor="middle" stroke="none">tasks, messages, tools</text>
+      <rect x="350" y="72" width="115" height="40" fill="#ddd"/><text x="407" y="89" text-anchor="middle" stroke="none" font-weight="bold">Task queue</text><text x="407" y="103" text-anchor="middle" stroke="none">Pub/Sub (key=task)</text>
+      <rect x="350" y="140" width="115" height="45" fill="#eee"/><text x="407" y="157" text-anchor="middle" stroke="none" font-weight="bold">Redis</text><text x="407" y="171" text-anchor="middle" stroke="none">event stream, bütçe</text>
+      <rect x="495" y="60" width="120" height="70" fill="#fff" stroke-width="2"/><text x="555" y="78" text-anchor="middle" stroke="none" font-weight="bold">Agent workers</text><text x="555" y="93" text-anchor="middle" stroke="none">orkestrasyon döngüsü</text><text x="555" y="107" text-anchor="middle" stroke="none">lease + heartbeat</text><text x="555" y="121" text-anchor="middle" stroke="none">adım başı checkpoint</text>
+      <rect x="640" y="20" width="115" height="50" fill="#fff"/><text x="697" y="38" text-anchor="middle" stroke="none" font-weight="bold">LLM Gateway</text><text x="697" y="52" text-anchor="middle" stroke="none">kota, fallback, CB</text><text x="697" y="64" text-anchor="middle" stroke="none">maliyet ölçümü</text>
+      <rect x="640" y="120" width="115" height="50" fill="#fff"/><text x="697" y="138" text-anchor="middle" stroke="none" font-weight="bold">Tool executor</text><text x="697" y="152" text-anchor="middle" stroke="none">timeout, sandbox</text><text x="697" y="164" text-anchor="middle" stroke="none">kullanıcı OAuth'u</text>
+      <line x1="80" y1="92" x2="98" y2="92" marker-end="url(#b)"/>
+      <line x1="190" y1="92" x2="208" y2="92" marker-end="url(#b)"/>
+      <line x1="325" y1="70" x2="348" y2="30" marker-end="url(#b)"/>
+      <line x1="325" y1="92" x2="348" y2="92" marker-end="url(#b)"/>
+      <line x1="348" y1="160" x2="327" y2="120" marker-end="url(#b)"/>
+      <line x1="465" y1="92" x2="493" y2="92" marker-end="url(#b)"/>
+      <line x1="495" y1="120" x2="467" y2="158" marker-end="url(#b)"/>
+      <line x1="495" y1="70" x2="467" y2="30" marker-end="url(#b)"/>
+      <line x1="615" y1="80" x2="638" y2="50" marker-end="url(#b)"/>
+      <line x1="615" y1="110" x2="638" y2="140" marker-end="url(#b)"/>
+      <text x="5" y="205" stroke="none" font-size="9">Task başlat: API → Postgres INSERT (+pending_events) → event publisher → kuyruk → worker. Olaylar: worker → Redis XADD → API XREAD → SSE. Final mesaj ve kullanım Postgres'e.</text>
+    </g>
+  </svg>
+
+  <div class="cols">
+  <div>
+    <h3>1 · Stream ve devam etme</h3>
+    <ul class="small">
+      <li>Worker her olayı <code>XADD task:{id}:events</code> ile yazar (artan <code>seq</code>). API pod'u sadece okur → hangi pod'a bağlandığın önemsiz.</li>
+      <li>Kopma: istemci <code>Last-Event-ID</code> ile tekrar bağlanır → <code>XRANGE</code> ile kaçırdıkları + <code>XREAD BLOCK</code> ile canlı.</li>
+      <li>Redis stream'i 24 saat sonra silinir; kalıcı kayıt Postgres'te (final mesaj, tool çağrıları).</li>
+      <li><b>Deploy:</b> API pod'u SIGTERM alınca yeni bağlantı kabul etmez, mevcut stream'lere <code>retry: 1000</code> gönderip kapatır → istemci başka pod'a devam eder. LB idle timeout &gt; keep-alive aralığı.</li>
+    </ul>
+    <h3>2 · Dayanıklı yürütme (worker crash)</h3>
+    <ul class="small">
+      <li>Worker task'ı <b>lease</b> ile alır (<code>lease_until</code>, heartbeat 10 sn). Lease biterse başka worker devralır.</li>
+      <li>Her adımdan sonra <code>checkpoint</code> (mesaj geçmişi + tamamlanan tool sonuçları). Devralan worker oradan devam eder, baştan değil.</li>
+      <li>Çok uzun/karmaşık iş akışları büyürse: Temporal gibi workflow motoru. Trade-off: yeni bir sistem işletmek.</li>
+    </ul>
+    <h3>3 · Tool yan etkileri: en fazla bir kez</h3>
+    <ul class="small">
+      <li>Yazan tool'larda <code>side_effect_key = task_id + tool_call_id</code> → hedef API'ye idempotency key olarak geçir veya önce DB'ye "started" yaz, sonuç gelince "done".</li>
+      <li>Crash sonrası "started" ama "done" yok → hedefte kontrol et (ör. bu key ile ticket var mı?) veya kullanıcıya sor. <b>Körlemesine tekrar etme.</b></li>
+    </ul>
+  </div>
+  <div>
+    <h3>4 · LLM Gateway ve kotalar</h3>
+    <ul class="small">
+      <li>Tenant başına <b>token bucket</b> (dakikalık hız + günlük bütçe), Redis Lua. Çağrı öncesi tahmini token rezerve, sonra gerçek kullanımla düzelt.</li>
+      <li>Sağlayıcı 429/5xx: exp. backoff, sonra <b>fallback model/sağlayıcı</b>; circuit breaker. Timeout: ilk token için 10 sn, toplam için 120 sn.</li>
+      <li>Öncelik: interaktif (web) &gt; async (API) &gt; batch. Yük altında batch'i kuyrukta beklet.</li>
+      <li>Kullanım ve maliyet olayları → faturalama ve tenant dashboard'u.</li>
+    </ul>
+    <h3>5 · Güvenlik ve multi-tenancy</h3>
+    <ul class="small">
+      <li>Tool'lar <b>kullanıcının</b> OAuth token'ı ile çalışır (kullanıcının göremediğini agent de göremez).</li>
+      <li>Prompt injection: tool çıktısı = güvenilmeyen veri; yazan tool'lar için insan onayı (requires_action), en az yetki scope'u.</li>
+      <li>Task'lar ve olaylar tenant_id ile; Redis key'lerinde de tenant prefix.</li>
+    </ul>
+    <h3>SLO ve gözlemlenebilirlik</h3>
+    <table class="small">
+      <tr><td>Task oluşturma availability</td><td>99.9%</td></tr>
+      <tr><td>Platform overhead (TTFT − model TTFT)</td><td>p95 &lt; 500 ms</td></tr>
+      <tr><td>Task başarı oranı (kullanıcı hatası hariç)</td><td>&gt; 99%</td></tr>
+      <tr><td>Kabul edilen task'ın kaybolması</td><td>0</td></tr>
+    </table>
+    <p class="small"><b>Metrikler:</b> kuyruk bekleme süresi, açık stream sayısı (pod başına), sağlayıcı bazlı hata/429, tokens/sn, tenant başına maliyet, tool hata oranı ve p95, lease devralma sayısı. <b>Trace:</b> task → her LLM çağrısı → her tool çağrısı bir span.</p>
+    <h3>Kapanış cümlesi</h3>
+    <p class="small say">"The main trade-off is the extra hop through Redis between worker and API. I accept it because it gives us resumable streams and lets us deploy either side without killing tasks."</p>
+  </div>
+  </div>
+</section>
+
+
+<section class="page">
+  <div class="ph"><span class="t">Senaryolarda ince noktalar (ikinci göz)</span><span class="n">11 / 15 · Tuzaklar</span></div>
+  <p class="small">Senaryo A ve B'yi çizdikten sonra bu listeyle kontrol et. Her satır, mülakatçının "what happens if…?" diye kurcalayacağı bir yer. Sol sütun tuzak, sağ sütun söyleyeceğin doğru cümle.</p>
+
+  <h3>Senaryo A · Knowledge Sync</h3>
+  <table class="small">
+    <tr><th style="width:32%">Tuzak</th><th>Doğru yaklaşım / cümle</th></tr>
+    <tr><td><b>202 = kalıcı kabul.</b> Kuyruğa yazdım, DB'ye sonra yazarım.</td><td>Idempotency kaydı + sync satırı + pending_events satırı <b>tek transaction</b>'da; commit'ten sonra 202. DB yoksa kabul etme. <span class="say">I only return 202 once the work is durably recorded.</span></td></tr>
+    <tr><td>Event publisher bir kez yayınlar.</td><td>Event publisher de tekrar yayınlayabilir → consumer'lar tekrarı tolere eder (deterministik upsert / dedupe).</td></tr>
+    <tr><td>Tek bir yarış var.</td><td>İki ayrı yarış: <b>aynı istek</b> (unique idempotency kaydı, fingerprint = source + normalize body) ve <b>farklı istekler</b> (partial unique index ile tek aktif sync; mevcut sync'i 409/200 ile ancak <b>yetki kontrolünden sonra</b> göster).</td></tr>
+    <tr><td>Kaynak cursor'ı bir versiyon numarasıdır.</td><td>Opak bir ilerleme token'ı. Sadece ilgili iş kalıcı olduktan sonra ilerlet; token süresi dolarsa kontrollü yeniden tarama.</td></tr>
+    <tr><td>İçerik hash'i aynı → yapacak iş yok.</td><td>Embedding'i atla ama <b>izin değişikliği ve silme</b> yine işlenir. İçerik tazeliği ile izin tazeliğinin bütçesi farklı.</td></tr>
+    <tr><td>Ordering key = kilit.</td><td>Sıra korunur ama mesaj tekrar gelebilir; durum geçişlerini storage'da koru (version/generation koşullu update).</td></tr>
+    <tr><td>RLS açtım, izolasyon tamam.</td><td>Owner ve ayrıcalıklı roller RLS'i bypass eder. Uygulama rolüyle test et; pool'lu bağlantıda tenant'ı <b>transaction'a özel</b> ayarla (<code>SET LOCAL</code>); tenant-aware foreign key; negatif testler.</td></tr>
+    <tr><td>Token geçerli → doküman görülebilir.</td><td>JWT, claim'lerin güvenilir biri tarafından verildiğini kanıtlar; dokümanın <b>hâlâ</b> görünür olduğunu değil. Snippet ve LLM'e metin vermeden önce filtrele; cache key'e tenant + izin bağlamı girsin.</td></tr>
+    <tr><td>Tenant URL'de olmaz / token'daki tenant yeter.</td><td>URL'deki tenant yetkilendirilirse güvenli olabilir; token'daki tenant da <b>nesne bazlı kontrolü</b> ortadan kaldırmaz. Her istekte nesne + aksiyon kontrolü.</td></tr>
+    <tr><td>Hemen büyük dağıtık sistem.</td><td>1M doküman × günde %1 = 10.000/86.400 ≈ <b>0,12 değişiklik/sn</b>. v1: Postgres full-text; embedding'i ancak semantik arama gerekirse ekle (maliyet + silme/izinle senkron tutulacak bir index daha).</td></tr>
+  </table>
+
+  <h3>Senaryo B · Agent Tasks</h3>
+  <table class="small">
+    <tr><th style="width:32%">Tuzak</th><th>Doğru yaklaşım / cümle</th></tr>
+    <tr><td>Lease yeterli.</td><td>Lease + <b>artan generation</b> (fencing token): eski worker'ın geç gelen yazımını storage reddeder.</td></tr>
+    <tr><td>Tool çağrısını "exactly once" yaparım.</td><td><span class="say">I can't promise exactly-once external effects from our database alone.</span> Çağrıdan önce step ID + niyeti kaydet; hedef idempotency destekliyorsa aynı key'i kullan; desteklemiyorsa timeout sonrası sonuç belirsizdir → hedefte kontrol et ya da kullanıcıya sor.</td></tr>
+    <tr><td>Onay = "evet, devam".</td><td>Onay <b>tam aksiyona ve parametrelere</b> bağlı; parametre değişirse eski onay geçersiz.</td></tr>
+    <tr><td>Redis stream'den her zaman devam edilir.</td><td>Cursor sadece saklanan olaylarda çalışır. Süresi geçmişse belgelenmiş bir cevap (ör. 410) dön, istemci güncel task durumunu çeksin. Stream kalıcı geçmiş değildir.</td></tr>
+    <tr><td>Streaming = dayanıklı yürütme.</td><td>Streaming arayüzü iyileştirir, dayanıklılık sağlamaz. Kısa, sınırlı bir okuma için senkron cevap da makul olabilir.</td></tr>
+    <tr><td>Fallback model her zaman güvenli.</td><td>Fallback de aynı politika ve <b>veri lokasyonu</b> kurallarına uymalı. Süre, adım, tool çağrısı ve token için bütçe; pahalı adımdan önce rezerve et.</td></tr>
+    <tr><td>Her task için metrik.</td><td>Task ID'leri metrik etiketi yapma (cardinality). Task detayı trace'te; metrikler: kuyruk gecikmesi, tamamlanma oranı, adım hatası, ilk faydalı çıktıya kadar süre, maliyet.</td></tr>
+  </table>
+  <p class="small muted">Referanslar: AWS transactional outbox, PostgreSQL row security, Google Cloud Pub/Sub message ordering. Senaryolar alıştırma tasarımıdır, AI Company'nin gerçek mimarisi değildir.</p>
+</section>
+
+
+<section class="page">
+  <div class="ph"><span class="t">Kod yazdırırlarsa: Go endpoint iskeleti</span><span class="n">12 / 15 · Kod</span></div>
+  <p class="small"><b>Dil seçimi:</b> En hızlı olduğun dili seç (burada Go). Başta sor: <span class="say">"Is it OK if I write this in Go? It's where I'm fastest, and I'm comfortable reading TypeScript."</span> Sıra: <b>validate → tenant (token'dan) → idempotency → iş → doğru status → tek hata formatı</b>. (Bu kod derlendi ve 7 senaryoyla test edildi.)</p>
+<div class="cols">
+<div><pre style="font-size:6.6pt;line-height:1.16">package main
+import (...) // context, crypto/sha256, encoding/hex,
+  // encoding/json, errors, log/slog, net/http, time
+
+type SyncRun struct {
+  ID          string    `json:&quot;id&quot;`
+  TenantID    string    `json:&quot;-&quot;`
+  SourceID    string    `json:&quot;source_id&quot;`
+  Mode        string    `json:&quot;mode&quot;`
+  Status      string    `json:&quot;status&quot;`
+  CreatedAt   time.Time `json:&quot;created_at&quot;`
+}
+
+// one error shape for the whole API
+type APIError struct {
+  Status int    `json:&quot;status&quot;`
+  Code   string `json:&quot;code&quot;`
+  Title  string `json:&quot;title&quot;`
+}
+
+func (e *APIError) Error() string { return e.Code }
+
+// in-memory fake in tests, Postgres in prod
+type Store interface {
+  SourceExists(tenant, source string) bool
+  ByIdempotencyKey(tenant, key string) (SyncRun, string, bool)
+  ActiveRun(tenant, source string) (SyncRun, bool)
+  // prod: UNIQUE(tenant_id, key) + pending_events row, one txn
+  Create(run SyncRun, key, bodyHash string) error
+}
+
+type Server struct {
+  store Store
+  newID func() string
+  now   func() time.Time
+}
+
+func (s *Server) Routes() *http.ServeMux {
+  mux := http.NewServeMux() // Go 1.22 patterns
+  mux.HandleFunc(&quot;POST /v1/sources/{id}/syncs&quot;, s.handle(s.createSync))
+  return mux
+}
+
+type handlerFunc func(w http.ResponseWriter, r *http.Request) error
+
+func (s *Server) handle(h handlerFunc) http.HandlerFunc {
+  return func(w http.ResponseWriter, r *http.Request) {
+    if err := h(w, r); err != nil {
+      var ae *APIError
+      if !errors.As(err, &amp;ae) {
+        slog.Error(&quot;unhandled&quot;, &quot;err&quot;, err,
+          &quot;request_id&quot;, r.Header.Get(&quot;X-Request-Id&quot;))
+        ae = &amp;APIError{500, &quot;INTERNAL&quot;, &quot;unexpected error&quot;}
+      }
+      writeJSON(w, ae.Status, ae, &quot;application/problem+json&quot;)
+    }
+  }
+}</pre></div>
+<div><pre style="font-size:6.6pt;line-height:1.16">func (s *Server) createSync(w http.ResponseWriter, r *http.Request) error {
+  // set by auth middleware from the verified JWT
+  tenant := TenantFrom(r.Context())
+  source := r.PathValue(&quot;id&quot;)
+  key := r.Header.Get(&quot;Idempotency-Key&quot;)
+  if key == &quot;&quot; {
+    return &amp;APIError{400, &quot;IDEMPOTENCY_KEY_REQUIRED&quot;, &quot;missing key&quot;}
+  }
+  var body struct {
+    Mode string `json:&quot;mode&quot;`
+  }
+  r.Body = http.MaxBytesReader(w, r.Body, 1&lt;&lt;20)
+  if err := json.NewDecoder(r.Body).Decode(&amp;body); err != nil {
+    return &amp;APIError{400, &quot;INVALID_JSON&quot;, &quot;bad json&quot;}
+  }
+  if body.Mode == &quot;&quot; {
+    body.Mode = &quot;incremental&quot;
+  }
+  if body.Mode != &quot;full&quot; &amp;&amp; body.Mode != &quot;incremental&quot; {
+    return &amp;APIError{400, &quot;INVALID_MODE&quot;, &quot;full|incremental&quot;}
+  }
+  if !s.store.SourceExists(tenant, source) {
+    // same 404 for another tenant&#x27;s id: no leak
+    return &amp;APIError{404, &quot;NOT_FOUND&quot;, &quot;source not found&quot;}
+  }
+  sum := sha256.Sum256([]byte(body.Mode))
+  hash := hex.EncodeToString(sum[:])
+
+  if prev, h, ok := s.store.ByIdempotencyKey(tenant, key); ok {
+    if h != hash {
+      return &amp;APIError{409, &quot;IDEMPOTENCY_KEY_REUSED&quot;, &quot;body differs&quot;}
+    }
+    w.Header().Set(&quot;Location&quot;, &quot;/v1/syncs/&quot;+prev.ID)
+    writeJSON(w, 202, prev, &quot;&quot;) // replay first answer
+    return nil
+  }
+  if active, ok := s.store.ActiveRun(tenant, source); ok {
+    w.Header().Set(&quot;Location&quot;, &quot;/v1/syncs/&quot;+active.ID)
+    writeJSON(w, 200, active, &quot;&quot;) // documented choice
+    return nil
+  }
+  run := SyncRun{ID: &quot;syn_&quot; + s.newID(), TenantID: tenant,
+    SourceID: source, Mode: body.Mode,
+    Status: &quot;queued&quot;, CreatedAt: s.now().UTC()}
+  if err := s.store.Create(run, key, hash); err != nil {
+    return err // real store: unique violation → replay/409
+  }
+  w.Header().Set(&quot;Location&quot;, &quot;/v1/syncs/&quot;+run.ID)
+  writeJSON(w, 202, run, &quot;&quot;)
+  return nil
+}
+
+func writeJSON(w http.ResponseWriter, status int, v any, ctype string) {
+  if ctype == &quot;&quot; {
+    ctype = &quot;application/json&quot;
+  }
+  w.Header().Set(&quot;Content-Type&quot;, ctype)
+  w.WriteHeader(status)
+  _ = json.NewEncoder(w).Encode(v)
+}
+
+type tenantKey struct{}
+
+func TenantFrom(ctx context.Context) string {
+  t, _ := ctx.Value(tenantKey{}).(string)
+  return t
+}</pre></div>
+</div>
+  <div class="cols small">
+    <div>
+      <h4>Yazarken sesli söyle</h4>
+      <ul>
+        <li>"The tenant comes from the verified token, never from the request body."</li>
+        <li>"Storage is behind an interface, so I can test with an in-memory fake and swap in Postgres."</li>
+        <li>"In production the race between two identical requests is closed by a unique constraint, not by this if-check."</li>
+        <li>"Insert and publish can diverge if we crash in between, so in production I'd write a pending_events row in the same transaction and let an event publisher send it (transactional outbox)."</li>
+      </ul>
+    </div>
+    <div>
+      <h4>Test senaryoları (göster!)</h4>
+      <ul>
+        <li>Aynı key + aynı body → aynı run, 202. Aynı key + farklı body → 409.</li>
+        <li>Key yok → 400. Geçersiz mode → 400. Başka tenant'ın kaynağı → 404.</li>
+        <li>Aktif run varken yeni key → mevcut run, 200.</li>
+        <li><code>httptest.NewRecorder()</code> + context'e tenant koyarak handler testi.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+
+<section class="page">
+  <div class="ph"><span class="t">Mini drill'ler: 10'ar dakikada kağıda çiz</span><span class="n">13 / 15 · Pratik</span></div>
+  <p class="small">Her biri için: 3 netleştirme sorusu → 4-6 endpoint → 1 tablo → 1 risk. Sonra ipuçlarıyla karşılaştır. (Yolculukta en verimli pratik bu.)</p>
+  <table class="small">
+    <tr><th style="width:24%">Problem</th><th>Kontrol listesi / ipuçları</th></tr>
+    <tr><td><b>1. Internal Deployment API</b> (DX platformu: takımlar servislerini deploy eder). <i>İnfra rolüne en yakın soru!</i></td><td><code>POST /v1/services/{id}/deployments {image_digest, env, strategy:"canary"}</code> → 202 · <code>GET …/deployments/{id}</code> (pending → progressing → succeeded | failed | rolled_back) · <code>POST …:rollback</code> · <code>POST …:promote</code>. Tag değil <b>digest</b> (değişmez). Ortam başına aynı anda 1 deploy (lock). Canary: %5 → metrik analizi (hata oranı, p95) → otomatik rollback. Audit log, kim onayladı. Arkada ArgoCD/GitOps: API git'e commit eder ya da Argo API'sini çağırır.</td></tr>
+    <tr><td><b>2. Webhook delivery sistemi</b> (dışarıya olay gönderme)</td><td>Abonelik CRUD; olay → pending_events → event publisher → kuyruk → gönderici. HMAC imza + timestamp. Retry: exp. backoff 24 saate kadar, sonra DLQ + endpoint'i devre dışı bırak + e-posta. Endpoint başına circuit breaker ve eşzamanlılık limiti (yavaş müşteri diğerlerini bloklamaz). Sıralama garanti etme, <code>event_id</code> + <code>created_at</code> ver. <code>POST /v1/events/{id}:redeliver</code>.</td></tr>
+    <tr><td><b>3. Public API: API key + rate limiting</b></td><td>Key üretimi: sadece bir kez göster, DB'de hash (SHA-256), prefix ile arama. Scope'lar, son kullanım zamanı, rotasyon (iki key aynı anda geçerli). Token bucket Redis Lua; boyutlar: key, tenant, endpoint. Header'lar: <code>RateLimit-*</code>, <code>Retry-After</code>. Redis çökerse: lokal limit + fail-open (okuma) / fail-closed (pahalı LLM).</td></tr>
+    <tr><td><b>4. Büyük dosya yükleme</b> (öğrenme ürünü: video, PDF)</td><td><code>POST /v1/uploads {filename,size,content_type}</code> → GCS <b>resumable signed URL</b> → istemci direkt yükler → GCS event → işleme (virüs taraması, transcode, metin çıkarma) → <code>GET /v1/uploads/{id}</code> durum. Boyut/tip limiti, checksum (MD5/CRC32C), süresi dolan yarım yüklemeleri lifecycle ile sil.</td></tr>
+    <tr><td><b>5. Kurs kaydı ve ilerleme</b> (öğrenme ürünü)</td><td><code>PUT /v1/courses/{c}/enrollments/{user}</code> (idempotent). İlerleme: <code>POST …/progress-events {lesson_id, event:"completed", client_ts, event_id}</code>: offline mobil → event_id ile dedupe, sırasız gelirse max(…). Admin raporları ağır → read replica / analytics (BigQuery) export. Tamamlama sertifikası async.</td></tr>
+    <tr><td><b>6. Audit log API</b> (kurumsal müşteri isteği)</td><td>Append-only; <code>GET /v1/audit-events?actor=&amp;action=&amp;from=&amp;to=&amp;cursor=</code>. Zamana göre partition, tenant'a göre filtre, retention tenant ayarı. Değiştirilemezlik: hash zinciri veya WORM bucket. SIEM'e export (webhook / GCS günlük dosya). Yazma yolu ana isteği yavaşlatmasın: pending_events → async.</td></tr>
+    <tr><td><b>7. SCIM kullanıcı provizyonu</b> (Okta/Entra → AI Company)</td><td>SCIM 2.0 standardı: <code>/scim/v2/Users</code>, <code>/Groups</code>, PATCH ops. <code>externalId</code> ile eşleştir. Deaktive → oturumları ve refresh token'ları iptal et, ACL cache'i temizle. Toplu işlemlerde kısmi hata raporu. Tenant başına bearer token.</td></tr>
+    <tr><td><b>8. Feature flag / config servisi</b></td><td>Okuma ağırlıklı: SDK lokal cache + streaming güncelleme (SSE) + periyodik poll yedeği. Değerlendirme lokal (ağ çağrısı yok, lokal JWKS doğrulaması gibi). Kill switch. Değişiklik audit'i, yüzde bazlı rollout (deterministik hash(user_id)). Servis çökerse son bilinen config.</td></tr>
+  </table>
+  <h3>Kendi çizimin için boş alan</h3>
+  <div style="border:1px solid #999; height:150px;"></div>
+</section>
+
+
+<section class="page">
+  <div class="ph"><span class="t">Vaka çalışması · Bir auth platformunun evrimi</span><span class="n">14 / 15 · Vaka</span></div>
+  <p class="small">Çok kiracılı, çok sayıda micro-frontend'den oluşan kurumsal bir platformda kimlik doğrulama ve yetkilendirmenin adım adım evrimi. Her adımda gerçek alternatifler, kabul edilen trade-off'lar ve sonradan ortaya çıkan sınırlar var. İzin farkındalıklı API tasarımında (Senaryo A) doğrudan işe yarar.</p>
+
+  <table class="small">
+    <tr><th style="width:15%">Adım</th><th style="width:31%">Problem</th><th style="width:31%">Karar</th><th>Kabul edilen trade-off</th></tr>
+    <tr><td><b>0 · Önce</b></td><td>JWT'yi şişirmemek ve kullanıcı bilgisi çağrısını tek yerde toplamak için herkesin önünde merkezi bir session servisi.</td><td>Paylaşılan session ID, 4 saatlik kayan süre; her BFF isteği session'ı doğrular.</td><td>Her istekte ekstra hop, SPOF; sızan session ID'yi durdurmak elle müdahale ister.</td></tr>
+    <tr><td><b>1 · Token AuthN</b></td><td>Güvenlik (sızan session), gecikme, her MFE'nin kendi refresh mantığı.</td><td>Kısa ömürlü access token (~5 dk) + <b>HTTP-only cookie'de refresh token</b>; refresh shell'de merkezi; public key ile <b>lokal doğrulama</b>; minimal payload, PII yok.</td><td>İptal, access token ömrü kadar (≤5 dk) gecikebilir.</td></tr>
+    <tr><td><b>2 · İzin modeli</b></td><td>Sadece rol: kaba taneli, her uygulama kendi eşlemesini tutuyor, <b>denetlenemiyor</b>.</td><td>Bounded context başına <b>scope</b>; rol ile uygulama izni arasında <b>permission group</b>; market/bayi/kullanıcı tipi <b>filtreleri</b>; denetim için <b>permission snapshot</b>.</td><td>Karmaşıklık, yönetişim yükü, token boyutu.</td></tr>
+    <tr><td><b>3 · OIDC akışı</b></td><td>Bu token'ı kim, nasıl üretecek? Standart OIDC, hassas veri yok, bakımı kolay.</td><td>5 alternatif PoC → <b>Ory (Kratos + Hydra)</b>. <code>verify</code> / <code>getContexts</code> kütüphaneleri arka tarafı soyutlar.</td><td>Self-hosting ve işletme bizde.</td></tr>
+    <tr><td><b>4 · Token exchange</b></td><td>Merkezi güvenlik ekibi, hangi uygulamanın hangi token'ı kullandığını Entra'da göremiyordu.</td><td><b>RFC 8693 Token Exchange</b>: Entra access token → kurum token'ı. Format ve kütüphaneler aynı kaldı.</td><td>Ekstra istek; imzalama kodu ekstra inceleme ister.</td></tr>
+    <tr><td><b>5 · Sonra</b></td><td>Token boyut tavanı: çok sayıda pazara yetkili kullanıcılar token'a sığmıyor; statik rol eşlemesi; marka bazlı ve US/EU ayrımı ihtiyacı.</td><td>Merkezi karar servisi: <code>POST /authz/check</code>, ABAC, sandbox'lı JS policy'leri, cache, append-only audit.</td><td>Kritik yolda ağ çağrısı (&lt;20 ms p95 hedefi); ekiplerin yazdığı kodu çalıştırma riski.</td></tr>
+  </table>
+
+  <div class="cols">
+  <div>
+    <h3>Neden Ory? (alternatifler)</h3>
+    <table class="small">
+      <tr><td><b>Entra + custom UserInfo</b></td><td>En basit, ama her istekte ekstra çağrı ve gecikme; sadece Entra; offline yok.</td></tr>
+      <tr><td><b>Entra custom claims</b></td><td>Değişiklik için Global Admin; düz claim yapısı, JSON yok; loglar ekipte değil.</td></tr>
+      <tr><td><b>Keycloak</b></td><td>Kullanıcıların ayrı kopyası + senkronizasyon; özelleştirme Java'da; dik öğrenme eğrisi.</td></tr>
+      <tr><td><b>Ory ✓</b></td><td>Standart OIDC/OAuth2, en esnek token hook, çoklu IdP, olası offline, iyi admin araçları. Bedeli: self-hosted.</td></tr>
+    </table>
+  </div>
+  <div>
+    <h3>Hazır cevaplar (İngilizce)</h3>
+    <p class="small"><b>Why Ory?</b> <span class="say">We needed standard OIDC so any team could use off-the-shelf libraries, a token hook to add our permission claims, and room for more than one identity provider. Entra alone meant an extra user-info call per request, or admin-only custom claims with a flat structure. Keycloak meant syncing a copy of all users and writing Java plugins. Ory gave us all of it; the price was running it ourselves.</span></p>
+    <p class="small"><b>Biggest trade-off?</b> <span class="say">Putting authorization data in the token made checks local and fast, but revocation was slower and the token kept growing. Later the team hit a size ceiling for users with many markets and moved fine-grained authorization to a central, cached decision service.</span></p>
+    <p class="small"><b>How did you make adoption easy?</b> <span class="say">We wrapped verification in small libraries, so teams called verify or getContexts and never parsed tokens themselves. That also let us change the backend later without breaking anyone.</span></p>
+    <p class="small"><b>Security team?</b> <span class="say">After it was live, the central security team wanted visibility in Entra. We kept the token format and libraries and switched to standard OAuth token exchange, so consumers barely noticed.</span></p>
+    <p class="small"><b>Do differently?</b> (önerilen yansıma, katılıyorsan kullan) <span class="say">I'd keep authentication in the token but plan for fine-grained authorization as a cached decision API earlier, because the token-size limit was predictable.</span></p>
+    <div class="tip small"><b>AI Company'ye köprü:</b> Senaryo A'daki izin farkındalıklı arama aynı soru: izinler token'da mı, indekste mi, merkezi bir kontrolde mi? Bu sayfadaki trade-off'ları orada kullan.</div>
+  </div>
+  </div>
+</section>
+
+
+<section class="page">
+  <div class="ph"><span class="t">25 dakikalık kağıt mock + hafıza düzeltmeleri</span><span class="n">15 / 15 · Prova</span></div>
+  <div class="cols">
+  <div>
+    <h3>Mock akışı (zamanlayıcı kur)</h3>
+    <table class="small">
+      <tr><th style="width:18%">Dakika</th><th>Yap</th></tr>
+      <tr><td>0-3</td><td>Knowledge Sync veya Agent Tasks seç. 3 netleştirme sorusu yaz.</td></tr>
+      <tr><td>3-8</td><td>4 endpoint + 1 tam request/response yaz.</td></tr>
+      <tr><td>8-13</td><td>Tablolar, tenant sınırları, durumlar.</td></tr>
+      <tr><td>13-20</td><td>Bir crash, bir retry ve bir izin iptalini baştan sona izle.</td></tr>
+      <tr><td>20-25</td><td>Ana trade-off'u ve bir operasyonel kontrolü <b>sesli</b> söyle.</td></tr>
+    </table>
+    <h3>Kendini puanla</h3>
+    <table class="small">
+      <tr><th style="width:24%">Kontrol</th><th>İyi bir cevap neyi gösterir</th><th style="width:9%">✓</th></tr>
+      <tr><td>Sözleşme</td><td>İstemci ne olduğunu ve sonra ne yapacağını anlıyor.</td><td></td></tr>
+      <tr><td>Doğruluk</td><td>Tekrarlanan istek iki kez iş başlatmıyor; çakışan isteklerin sonucu tanımlı.</td><td></td></tr>
+      <tr><td>Güvenlik</td><td>Geçerli kimlikten sonra güncel nesne + aksiyon kontrolü var.</td><td></td></tr>
+      <tr><td>Kurtarma</td><td>Crash sonrası kalıcı durumu bulabiliyorsun; belirsiz yan etkileri açıklayabiliyorsun.</td><td></td></tr>
+      <tr><td>Operasyon</td><td>Hatayı fark etme, güvenli deploy, geri dönüş.</td><td></td></tr>
+      <tr><td>İletişim</td><td>Önce soruya cevap, faydalı detaydan sonra dur.</td><td></td></tr>
+      <tr><td>Sadelik</td><td>5 dakikada çizilebilen bir v1 vardı; karmaşıklık sorulunca geldi.</td><td></td></tr>
+    </table>
+    <h3>Takıldığında reset cümlesi</h3>
+    <p class="small say">Let me trace one request and find the first place where state changes.</p>
+  </div>
+  <div>
+    <h3>Hafızanı düzelt: 8 yanlış refleks</h3>
+    <ol class="small">
+      <li>Kuyruk sıralaması = sahiplik/kilit <b>değil</b>.</li>
+      <li>JWT doğrulaması = anında iptal <b>değil</b> (kısa ömürlü token: iptal, token süresi kadar gecikebilir).</li>
+      <li>İçerik değişmedi = izin değişmedi <b>değil</b>.</li>
+      <li>202 = kalıcı kabul. Kaydetmediğin işi kabul etme.</li>
+      <li>Timeout sonrası dış yan etki <b>belirsiz</b> olabilir.</li>
+      <li>Mülakat aracında bir özelliğin görünmesi = kullanma izni <b>değil</b>. Sor.</li>
+      <li>Mutex sadece tek process'i korur; birden çok replika = DB transaction / atomik update.</li>
+      <li>Davette süre yazmıyor: 60 dk bir <b>prova varsayımı</b>, başta sor.</li>
+    </ol>
+    <h3>Notların</h3>
+    <div class="write"></div><div class="write"></div><div class="write"></div><div class="write"></div><div class="write"></div><div class="write"></div><div class="write"></div><div class="write"></div><div class="write"></div><div class="write"></div><div class="write"></div><div class="write"></div>
+  </div>
+  </div>
+  <h3>Mock için çizim alanı</h3>
+  <div style="border:1px solid #999; height:205px;"></div>
+</section>
+
+
+</body>
+</html>

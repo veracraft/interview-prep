@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Tasks · API</title>
+<link rel="stylesheet" href="../assets/site.css?v=11">
+<script src="../assets/diagrams.js?v=11"></script>
+</head>
+<body>
+<header class="topbar"><div class="topbar-inner">
+  <a class="brand" href="../index.html">Mülakat Hazırlığı</a>
+  <nav>
+    <a href="../index.html">Ana sayfa</a>
+    <a href="../knowledge-sync/kapsam.html">Knowledge Sync</a>
+    <a class="active" href="kapsam.html">Agent Tasks</a>
+    <a href="../deployment-api/kapsam.html">Deployment API</a>
+  </nav>
+</div>
+<div class="subnav"><nav>
+    <a href="kapsam.html">1 · Kapsam</a>
+    <a class="active" href="api.html">2 · API</a>
+    <a href="cozum.html">3 · Minimum çözüm</a>
+    <a href="hata.html">4 · Hata ve güvenlik</a>
+    <a href="olcek.html">5 · Ölçek ve follow-up</a>
+    <a href="sozluk.html">Sözlük</a>
+    <a href="mock.html">Mock</a>
+</nav></div></header>
+
+<main class="wide">
+<h1>Agent Tasks · 2. API sözleşmesi</h1>
+<div class="step-hint"><b>Playbook 2/5 · API sözleşmesi.</b> Ne yaparsın: endpoint'ler → bir tam request/response → durumlar → hatalar. Idempotency ve yetkiyi burada söyle. Gösterdiğin: istemcinin servisi nasıl kullanacağını.</div>
+<p class="small muted">Önce kağıda kendin yaz, sonra butonla karşılaştır.</p>
+<p class="small muted">Endpoint'e ya da hata koduna tıkla: altında istek ve cevap açılır. ↗ işaretli hücreye tıkla: ilgili karar açılır.</p>
+<div class="diagram" id="apiAT" data-all="Endpoint&#x27;ler → tek tam istek → durumlar ve akış → hatalar → kurallar.">
+  <div class="pills"></div>
+  <div class="api-sheet"><div class="stg" data-s="1" data-e="9"><p class="small" style="margin:0"><b>Kaynaklar:</b> conversation · message · task (uzun süren iş) · task event (sıra numaralı) · tool call</p></div><div class="table-wrap"><table><tr class="stg" data-s="1" data-e="9"><th>Endpoint</th><th>Cevap</th><th>Ne yapar?</th></tr><tr class="stg" data-s="1" data-e="9"><td class="ex-toggle"><code>POST /v1/conversations/{id}/tasks</code></td><td>202 + Location (ya da 200 SSE)</td><td data-href="hata.html#a2">Task başlat.</td></tr><tr class="ex-row stg" data-s="1" data-e="9" hidden><td colspan="3"><div class="ex-label">İstek</div><pre>POST /v1/conversations/cv_1/tasks
+Authorization: Bearer &lt;JWT&gt;
+Idempotency-Key: 8a0d…
+{ "input": "Q3'te churn neden arttı? Özetle ve Jira'da ticket aç." }</pre><div class="ex-label">Cevap</div><pre>202 Accepted
+Location: /v1/tasks/task_7d2
+{ "id": "task_7d2", "status": "queued" }</pre><div class="ex-label">Aynı istek Accept: text/event-stream ile gelirse</div><pre>200 OK
+Content-Type: text/event-stream
+
+id: 1
+event: task.started
+data: {"task_id":"task_7d2"}</pre><p class="small" style="margin:4px 0 0">Ayrıntısı 2. adımda: satır satır açıklama.</p></td></tr><tr class="stg" data-s="1" data-e="9"><td class="ex-toggle"><code>GET /v1/tasks/{id}</code></td><td>200</td><td data-href="hata.html#a5">Durum ve sonuç.</td></tr><tr class="ex-row stg" data-s="1" data-e="9" hidden><td colspan="3"><div class="ex-label">İstek</div><pre>GET /v1/tasks/task_7d2
+Authorization: Bearer &lt;JWT&gt;</pre><div class="ex-label">Onay beklerken</div><pre>200 OK
+{ "id": "task_7d2", "status": "requires_action",
+  "pending_action": {
+    "tool_call_id": "tc_9",
+    "tool": "jira.create_issue",
+    "args": { "project": "SALES", "title": "Q3 churn" } },
+  "usage": { "input_tokens": 8100, "output_tokens": 420 } }</pre><div class="ex-label">Bitince</div><pre>200 OK
+{ "id": "task_7d2", "status": "completed",
+  "result": { "message_id": "msg_10" } }</pre></td></tr><tr class="stg" data-s="1" data-e="9"><td class="ex-toggle"><code>GET /v1/tasks/{id}/events</code></td><td>200 SSE</td><td data-href="cozum.html#canli">Canlı akış; <code>Last-Event-ID</code> ile devam.</td></tr><tr class="ex-row stg" data-s="1" data-e="9" hidden><td colspan="3"><div class="ex-label">İstek</div><pre>GET /v1/tasks/task_7d2/events
+Authorization: Bearer &lt;JWT&gt;
+Accept: text/event-stream
+Last-Event-ID: 41</pre><div class="ex-label">Cevap (akış, 42'den devam eder)</div><pre>id: 42
+event: tool.started
+data: {"tool":"search","input":"Q3 churn"}
+
+id: 43
+event: message.delta
+data: {"text":"Q3'te churn'ün artmasının"}</pre><p class="small" style="margin:4px 0 0">41 artık saklanmıyorsa 410 <code>EVENTS_EXPIRED</code>; istemci <code>GET /v1/tasks/{id}</code> ile son hali çeker.</p></td></tr><tr class="stg" data-s="1" data-e="9"><td class="ex-toggle"><code>POST /v1/tasks/{id}/tool_approvals</code></td><td>200 / 409</td><td data-href="hata.html#a4">Yazan tool'u onayla ya da reddet.</td></tr><tr class="ex-row stg" data-s="1" data-e="9" hidden><td colspan="3"><div class="ex-label">İstek</div><pre>POST /v1/tasks/task_7d2/tool_approvals
+Authorization: Bearer &lt;JWT&gt;
+{ "tool_call_id": "tc_9", "decision": "approve" }</pre><div class="ex-label">Cevap</div><pre>200 OK
+{ "task_id": "task_7d2", "status": "running" }</pre><p class="small" style="margin:4px 0 0">Onay, istekteki parametrelerin aynısına bağlı. Task onay beklemiyorsa 409 <code>NOT_AWAITING_APPROVAL</code>.</p></td></tr><tr class="stg" data-s="1" data-e="9"><td class="ex-toggle"><code>POST /v1/tasks/{id}:cancel</code></td><td>202</td><td data-href="hata.html#a6">İptal.</td></tr><tr class="ex-row stg" data-s="1" data-e="9" hidden><td colspan="3"><div class="ex-label">İstek</div><pre>POST /v1/tasks/task_7d2:cancel
+Authorization: Bearer &lt;JWT&gt;</pre><div class="ex-label">Cevap</div><pre>202 Accepted
+{ "id": "task_7d2", "status": "running", "cancel_requested": true }</pre><div class="ex-label">Tekrar çağrılırsa (task bitmiş)</div><pre>200 OK
+{ "id": "task_7d2", "status": "cancelled" }</pre><p class="small" style="margin:4px 0 0">İptal bir sonraki adımda etkili olur; zaten çalışmış tool çağrıları geri alınmaz.</p></td></tr><tr class="stg" data-s="1" data-e="9"><td class="ex-toggle"><code>GET /v1/conversations/{id}/messages?cursor=…</code></td><td>200</td><td data-href="../ortak.html#cursor">Geçmiş, cursor sayfalama.</td></tr><tr class="ex-row stg" data-s="1" data-e="9" hidden><td colspan="3"><div class="ex-label">İstek</div><pre>GET /v1/conversations/cv_1/messages?limit=20
+Authorization: Bearer &lt;JWT&gt;</pre><div class="ex-label">Cevap</div><pre>200 OK
+{ "data": [
+    { "id": "msg_9", "role": "user",
+      "content": "Q3'te churn neden arttı?" },
+    { "id": "msg_10", "role": "assistant",
+      "content": "Q3'te churn %4 arttı…", "task_id": "task_7d2" } ],
+  "next_cursor": null, "has_more": false }</pre></td></tr></table></div><div class="stg" data-s="2" data-e="9"><p style="margin:0"><b>Akış:</b> istemci gönderir → API kaydeder (tek transaction) → 202 döner → istemci akışı açar ya da <code>Location</code>'ı sorar. Aşağıda aynı istek satır satır.</p></div><div class="table-wrap"><table><tr class="stg" data-s="2" data-e="9"><th style="width:45%">İstek</th><th>Ne demek, neden?</th></tr><tr class="stg" data-s="2" data-e="9"><td><code>POST /v1/conversations/cv_1/tasks</code></td><td><code>cv_1</code> konuşmasında <b>yeni bir task</b> başlat. Task konuşmanın altında yaşar; konuşma başına tek aktif task kuralı buradan gelir.</td></tr><tr class="stg" data-s="2" data-e="9"><td><code>Authorization: Bearer &lt;JWT&gt;</code></td><td><b>Kim olduğun:</b> tenant ve kullanıcı token'dan. Tool'lar da bu kullanıcının yetkisiyle çalışacak. <a href="../ortak.html#token">Token'dan nasıl? →</a></td></tr><tr class="stg" data-s="2" data-e="9"><td><code>Idempotency-Key: 8a0d…</code></td><td>Slack ya da mobil ağ hatasında aynı isteği tekrar gönderir; aynı anahtar <b>aynı task'ı</b> döndürür, ikinci cevap ve ikinci maliyet olmaz.</td></tr><tr class="stg" data-s="2" data-e="9"><td><code>{ "input": "Q3'te churn neden arttı? …" }</code></td><td>Kullanıcının mesajı. Task ile aynı transaction'da konuşma geçmişine yazılır.</td></tr></table></div><div class="table-wrap"><table><tr class="stg" data-s="2" data-e="9"><th style="width:45%">Cevap</th><th>Ne demek, neden?</th></tr><tr class="stg" data-s="2" data-e="9"><td><code>202 Accepted</code></td><td>"Aldım ve <b>kaydettim</b>; task arka planda çalışacak." Task saniyeler ile dakikalar sürer, HTTP isteği bekletilmez.</td></tr><tr class="stg" data-s="2" data-e="9"><td><code>Location: /v1/tasks/task_7d2</code></td><td>Durumu nereden soracağın. Canlı izlemek için <code>/v1/tasks/task_7d2/events</code>.</td></tr><tr class="stg" data-s="2" data-e="9"><td><code>{ "id": "task_7d2", "status": "queued" }</code></td><td>Task'ın kimliği ve ilk durumu.</td></tr></table></div><div class="stg" data-s="2" data-e="9"><p class="small" style="margin:0">Web istemcisi aynı isteği <code>Accept: text/event-stream</code> ile atarsa cevap doğrudan 200 + canlı akış olur; ayrı bir istek gerekmez.</p></div><div class="stg" data-s="3" data-e="9" data-href="cozum.html#canli"><pre>queued → running ⇄ requires_action → completed | failed | cancelled
+
+GET /v1/tasks/task_7d2/events        Last-Event-ID: 41
+id: 42
+event: tool.started
+data: {"tool":"search","input":"Q3 churn"}
+
+id: 44
+event: tool.awaiting_approval
+data: {"tool_call_id":"tc_9","tool":"jira.create_issue","args":{…}}</pre></div><div class="stg" data-s="4" data-e="9"><p class="small" style="margin:0"><b>Tek hata formatı:</b> sabit <code>code</code>, insan için <code>message</code>, <code>request_id</code>, gerekirse <code>details</code>.</p></div><div class="table-wrap"><table><tr class="stg" data-s="4" data-e="9"><th>Kod</th><th>Ne zaman?</th></tr><tr class="stg" data-s="4" data-e="9"><td class="ex-toggle">400 <code>VALIDATION_FAILED</code></td><td>Boş input, bilinmeyen alan.</td></tr><tr class="ex-row stg" data-s="4" data-e="9" hidden><td colspan="2"><pre>400 Bad Request
+{ "error": { "code": "VALIDATION_FAILED",
+             "message": "input must not be empty",
+             "request_id": "req_4c1…",
+             "details": { "field": "input" } } }</pre></td></tr><tr class="stg" data-s="4" data-e="9"><td class="ex-toggle">401 <code>UNAUTHENTICATED</code></td><td>Token yok ya da süresi dolmuş.</td></tr><tr class="ex-row stg" data-s="4" data-e="9" hidden><td colspan="2"><pre>401 Unauthorized
+{ "error": { "code": "UNAUTHENTICATED",
+             "message": "Token expired",
+             "request_id": "req_4c1…" } }</pre></td></tr><tr class="stg" data-s="4" data-e="9"><td class="ex-toggle">404 <code>NOT_FOUND</code></td><td data-href="hata.html#a4">Task ya da konuşma yok <i>ya da</i> başkasının: varlığını sızdırma.</td></tr><tr class="ex-row stg" data-s="4" data-e="9" hidden><td colspan="2"><pre>404 Not Found
+{ "error": { "code": "NOT_FOUND",
+             "message": "Task not found",
+             "request_id": "req_4c1…" } }</pre></td></tr><tr class="stg" data-s="4" data-e="9"><td class="ex-toggle">409 <code>TASK_ALREADY_ACTIVE</code></td><td data-href="hata.html#a3">Konuşmada çalışan task var.</td></tr><tr class="ex-row stg" data-s="4" data-e="9" hidden><td colspan="2"><pre>409 Conflict
+{ "error": { "code": "TASK_ALREADY_ACTIVE",
+             "message": "This conversation already has a running task",
+             "request_id": "req_4c1…",
+             "details": { "task_id": "task_7c9" } } }</pre></td></tr><tr class="stg" data-s="4" data-e="9"><td class="ex-toggle">409 <code>NOT_AWAITING_APPROVAL</code></td><td data-href="hata.html#a4">Onay geldi ama task onay beklemiyor.</td></tr><tr class="ex-row stg" data-s="4" data-e="9" hidden><td colspan="2"><pre>409 Conflict
+{ "error": { "code": "NOT_AWAITING_APPROVAL",
+             "message": "Task task_7d2 is running, not waiting for approval",
+             "request_id": "req_4c1…" } }</pre></td></tr><tr class="stg" data-s="4" data-e="9"><td class="ex-toggle">410 <code>EVENTS_EXPIRED</code></td><td data-href="cozum.html#canli"><code>Last-Event-ID</code> artık saklanmıyor.</td></tr><tr class="ex-row stg" data-s="4" data-e="9" hidden><td colspan="2"><pre>410 Gone
+{ "error": { "code": "EVENTS_EXPIRED",
+             "message": "Events before 120 are no longer available; fetch the task instead",
+             "request_id": "req_4c1…" } }</pre></td></tr><tr class="stg" data-s="4" data-e="9"><td class="ex-toggle">429 <code>BUDGET_EXCEEDED</code></td><td data-href="olcek.html#followup">Tenant'ın token bütçesi doldu.</td></tr><tr class="ex-row stg" data-s="4" data-e="9" hidden><td colspan="2"><pre>429 Too Many Requests
+Retry-After: 600
+{ "error": { "code": "BUDGET_EXCEEDED",
+             "message": "Token budget for today is used up",
+             "request_id": "req_4c1…",
+             "details": { "resets_at": "2026-11-11T00:00:00Z" } } }</pre></td></tr></table></div><div class="table-wrap"><table><tr class="stg" data-s="5" data-e="9"><th>Kural</th><th>Karar</th></tr><tr class="stg" data-s="5" data-e="9" data-href="hata.html#a2"><td>Tekrar</td><td>Aynı <code>Idempotency-Key</code> → aynı task döner.</td></tr><tr class="stg" data-s="5" data-e="9" data-href="hata.html#a3"><td>Eşzamanlı</td><td>Konuşma başına tek aktif task.</td></tr><tr class="stg" data-s="5" data-e="9" data-href="hata.html#a4"><td>Yetki</td><td>Kullanıcı sadece kendi konuşmasını görür; onayı task'ın sahibi verir; akış okunmadan önce sahiplik kontrolü.</td></tr><tr class="stg" data-s="5" data-e="9" data-href="hata.html#a6"><td>İptal</td><td><code>:cancel</code> idempotent; zaten çalışmış tool çağrıları geri alınmaz.</td></tr><tr class="stg" data-s="5" data-e="9" data-href="hata.html#idem-fark"><td>Tool tekrarı</td><td>Yazan tool en fazla bir kez: <code>side_effect_key</code>.</td></tr></table></div></div>
+  <div class="stage-text"><div class="t"></div><div class="d"></div></div>
+  <div class="btns"><button class="btn" type="button" data-act="prev">← Önceki</button><button class="btn" type="button" data-act="next">Sonraki →</button><button class="btn" type="button" data-act="all">Hepsi</button></div>
+</div>
+<div class="say">Creating a task returns 202 with a task id, and the client can follow it live over SSE. Every event has a sequence number, so a client that reconnects just sends Last-Event-ID.</div>
+<nav class="pager"><a href="kapsam.html">← 1 · Kapsam</a><a href="cozum.html">3 · Minimum çözüm →</a></nav>
+</main>
+<footer>Kişisel çalışma notları. Senaryolar alıştırma amaçlıdır; şirket adları anonimleştirilmiştir.</footer>
+<script>initStepper("apiAT", [{"n": "1 · Endpoint'ler", "c": "#AFA9EC", "d": "Önce isimler: task başlat, durum, canlı akış, onay, iptal, geçmiş. Satıra tıklayınca ilgili karar açılır."}, {"n": "2 · Tek tam istek", "c": "#5DCAA5", "d": "Bir endpoint'i baştan sona yaz ve her satırın neden orada olduğunu söyleyebil."}, {"n": "3 · Durum ve ilerleme", "c": "#F0997B", "d": "Durum makinesi ve canlı akış: her olay sıra numaralı, istemci kaldığı numaradan devam eder."}, {"n": "4 · Hatalar", "c": "#EF9F27", "d": "Tek hata formatı. Bu sisteme özgü kodlar: aktif task, onay beklemiyor, akış süresi doldu, bütçe."}, {"n": "5 · Kurallar", "c": "#ED93B1", "d": "Tekrar, eşzamanlılık, yetki, iptal ve tool tekrarı: tek cümleyle."}]);</script>
+</body>
+</html>

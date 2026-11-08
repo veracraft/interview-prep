@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Knowledge Sync · Ölçek ve follow-up</title>
+<link rel="stylesheet" href="../assets/site.css?v=11">
+<script src="../assets/diagrams.js?v=11"></script>
+<style>
+details.qa { padding: 10px 16px; }
+details.qa summary { cursor: pointer; font-size: 16.5px; }
+details.qa[open] summary { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="topbar-inner">
+  <a class="brand" href="../index.html">Mülakat Hazırlığı</a>
+  <nav>
+    <a href="../index.html">Ana sayfa</a>
+    <a class="active" href="kapsam.html">Knowledge Sync</a>
+    <a href="../agent-tasks/kapsam.html">Agent Tasks</a>
+    <a href="../deployment-api/kapsam.html">Deployment API</a>
+  </nav>
+</div>
+<div class="subnav"><nav>
+    <a href="kapsam.html">1 · Kapsam</a>
+    <a href="api.html">2 · API</a>
+    <a href="cozum.html">3 · Minimum çözüm</a>
+    <a href="hata.html">4 · Hata ve güvenlik</a>
+    <a class="active" href="olcek.html">5 · Ölçek ve follow-up</a>
+    <a href="sozluk.html">Sözlük</a>
+    <a href="mock.html">Mock</a>
+</nav></div></header>
+
+<main class="wide">
+<h1>Knowledge Sync · 5. Ölçek ve follow-up</h1>
+<div class="step-hint"><b>Playbook 5/5 · Ölçek ve follow-up.</b> Ne yaparsın: önce darboğazı adlandır, sonra parçayı ekle; daha basit alternatifi ve geçiş koşulunu söyle. Gösterdiğin: kararlarını ihtiyaca bağlayabildiğini.</div>
+<h2 id="diyagram">Akış: 4–5. aşama</h2>
+<p class="small muted">Diyagram 4. aşamadan açılıyor; önceki aşamalar soluk. Butonlarla 1–3'e de dönebilirsin.</p>
+<div class="diagram" id="diagA" data-start="4" data-all="Okumak için soldan sağa: istek yolu üstte, arama ikinci sırada, kuyruk ve worker altta. Oklar numaralı; açıklamaları altta.">
+  <div class="pills"></div>
+  <svg class="arch" viewBox="0 0 1050 680" role="img" aria-labelledby="diagA-t diagA-d"><title id="diagA-t">Knowledge Sync mimarisi</title><desc id="diagA-d">Admin, gateway, Knowledge Sources API, Postgres, event publisher, Kafka topic, sync worker, kaynak uygulamalar, arama API'si, Redis, webhook alıcısı ve ACL worker; oklar numaralıdır.</desc><defs>
+<marker id="diagAm1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#AFA9EC" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<marker id="diagAm2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#5DCAA5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<marker id="diagAm3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#F0997B" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<marker id="diagAm4" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#EF9F27" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<marker id="diagAm5" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#ED93B1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+</defs>
+<g class="c-purple stg" data-s="1" data-e="9"><rect x="20" y="40" width="100" height="56" rx="6" stroke-width="0.6"/><text class="th" x="70" y="59" text-anchor="middle" dominant-baseline="central">Admin</text><text class="ts" x="70" y="77" text-anchor="middle" dominant-baseline="central">UI / API</text></g>
+<g class="c-purple stg" data-s="1" data-e="9" data-term="gateway"><rect x="220" y="40" width="100" height="196" rx="6" stroke-width="0.6"/><text class="th" x="270" y="120" text-anchor="middle" dominant-baseline="central">Gateway</text><text class="ts" x="270" y="138" text-anchor="middle" dominant-baseline="central">JWT</text><text class="ts" x="270" y="156" text-anchor="middle" dominant-baseline="central">rate limit</text></g>
+<g class="c-purple stg" data-s="1" data-e="9" data-term="api"><rect x="420" y="40" width="140" height="56" rx="6" stroke-width="0.6"/><text class="th" x="490" y="59" text-anchor="middle" dominant-baseline="central">Sources API</text><text class="ts" x="490" y="77" text-anchor="middle" dominant-baseline="central">202 + idempotency</text></g>
+<g class="c-purple stg" data-s="1" data-e="9" data-term="postgres"><rect x="660" y="40" width="150" height="196" rx="6" stroke-width="0.6"/><text class="th" x="735" y="129" text-anchor="middle" dominant-baseline="central">Postgres</text><text class="ts" x="735" y="147" text-anchor="middle" dominant-baseline="central">tablolar aşağıda ↓</text></g>
+<g class="c-teal stg" data-s="2" data-e="9" data-term="pending-events"><rect x="660" y="320" width="150" height="56" rx="6" stroke-width="0.6"/><text class="th" x="735" y="339" text-anchor="middle" dominant-baseline="central">Event publisher</text><text class="ts" x="735" y="357" text-anchor="middle" dominant-baseline="central">pending_events</text></g>
+<g class="c-teal stg" data-s="2" data-e="9" data-term="kafka"><rect x="660" y="460" width="150" height="56" rx="6" stroke-width="0.6"/><text class="th" x="735" y="479" text-anchor="middle" dominant-baseline="central">Kafka topic</text></g>
+<g class="c-teal stg" data-s="2" data-e="5" data-term="kafka"><text class="ts" x="735" y="497" text-anchor="middle" dominant-baseline="central">sync-jobs</text></g>
+<g class="c-pink stg" data-s="5" data-e="9" data-term="kafka"><text class="ts" x="735" y="497" text-anchor="middle" dominant-baseline="central">sync-jobs, acl-changes</text></g>
+<g class="c-teal stg" data-s="2" data-e="9" data-term="sync-worker"><rect x="420" y="460" width="140" height="56" rx="6" stroke-width="0.6"/><text class="th" x="490" y="479" text-anchor="middle" dominant-baseline="central">Sync worker</text><text class="ts" x="490" y="497" text-anchor="middle" dominant-baseline="central">cursor, upsert</text></g>
+<g class="c-teal stg" data-s="2" data-e="9" data-term="source-apps"><rect x="20" y="460" width="100" height="56" rx="6" stroke-width="0.6"/><text class="th" x="70" y="479" text-anchor="middle" dominant-baseline="central">Source apps</text><text class="ts" x="70" y="497" text-anchor="middle" dominant-baseline="central">Drive, Slack</text></g>
+<g class="c-coral stg" data-s="3" data-e="9"><rect x="20" y="180" width="100" height="56" rx="6" stroke-width="0.6"/><text class="th" x="70" y="199" text-anchor="middle" dominant-baseline="central">User</text><text class="ts" x="70" y="217" text-anchor="middle" dominant-baseline="central">or agent</text></g>
+<g class="c-coral stg" data-s="3" data-e="9" data-term="acl"><rect x="420" y="180" width="140" height="56" rx="6" stroke-width="0.6"/><text class="th" x="490" y="199" text-anchor="middle" dominant-baseline="central">Search API</text><text class="ts" x="490" y="217" text-anchor="middle" dominant-baseline="central">ACL filter first</text></g>
+<g class="c-amber stg" data-s="4" data-e="9" data-term="redis"><rect x="420" y="320" width="140" height="56" rx="6" stroke-width="0.6"/><text class="th" x="490" y="339" text-anchor="middle" dominant-baseline="central">Redis</text><text class="ts" x="490" y="357" text-anchor="middle" dominant-baseline="central">groups, quota</text></g>
+<g class="c-amber stg" data-s="4" data-e="9" data-term="webhook"><rect x="220" y="600" width="100" height="56" rx="6" stroke-width="0.6"/><text class="th" x="270" y="619" text-anchor="middle" dominant-baseline="central">Webhooks</text><text class="ts" x="270" y="637" text-anchor="middle" dominant-baseline="central">verify, enqueue</text></g>
+<g class="c-pink stg" data-s="5" data-e="9" data-term="acl"><rect x="900" y="460" width="130" height="56" rx="6" stroke-width="0.6"/><text class="th" x="965" y="479" text-anchor="middle" dominant-baseline="central">ACL worker</text><text class="ts" x="965" y="497" text-anchor="middle" dominant-baseline="central">priority lane</text></g>
+<g class="stg" data-s="1" data-e="9"><path d="M120 68 L218 68" stroke="#AFA9EC" stroke-width="1.6" fill="none" marker-end="url(#diagAm1)"/><text class="al" x="170" y="60" text-anchor="middle" fill="#AFA9EC">1 · POST</text></g>
+<g class="stg" data-s="1" data-e="9"><path d="M320 68 L418 68" stroke="#AFA9EC" stroke-width="1.6" fill="none" marker-end="url(#diagAm1)"/><text class="al" x="370" y="60" text-anchor="middle" fill="#AFA9EC">2 · auth</text></g>
+<g class="stg" data-s="1" data-e="9"><path d="M560 68 L658 68" stroke="#AFA9EC" stroke-width="1.6" fill="none" marker-end="url(#diagAm1)"/><text class="al" x="610" y="60" text-anchor="middle" fill="#AFA9EC">3 · INSERT</text></g>
+<g class="stg" data-s="2" data-e="9"><path d="M735 236 L735 318" stroke="#5DCAA5" stroke-width="1.6" fill="none" stroke-dasharray="5 4" marker-end="url(#diagAm2)"/><text class="al" x="742" y="282" text-anchor="start" fill="#5DCAA5">4 · poll</text></g>
+<g class="stg" data-s="2" data-e="9"><path d="M735 376 L735 458" stroke="#5DCAA5" stroke-width="1.6" fill="none" stroke-dasharray="5 4" marker-end="url(#diagAm2)"/><text class="al" x="742" y="422" text-anchor="start" fill="#5DCAA5">5 · publish</text></g>
+<g class="stg" data-s="2" data-e="9"><path d="M660 500 L562 500" stroke="#5DCAA5" stroke-width="1.6" fill="none" marker-end="url(#diagAm2)"/><text class="al" x="610" y="520" text-anchor="middle" fill="#5DCAA5">6 · consume</text></g>
+<g class="stg" data-s="2" data-e="9"><path d="M420 488 L122 488" stroke="#5DCAA5" stroke-width="1.6" fill="none" marker-end="url(#diagAm2)"/><text class="al" x="270" y="480" text-anchor="middle" fill="#5DCAA5">7 · fetch changes</text></g>
+<g class="stg" data-s="2" data-e="9"><path d="M560 472 L610 472 L610 222 L658 222" stroke="#5DCAA5" stroke-width="1.6" fill="none" marker-end="url(#diagAm2)"/><text class="al" x="603" y="292" text-anchor="end" fill="#5DCAA5">8 · upsert</text></g>
+<g class="stg" data-s="3" data-e="9"><path d="M120 208 L218 208" stroke="#F0997B" stroke-width="1.6" fill="none" marker-end="url(#diagAm3)"/><text class="al" x="170" y="200" text-anchor="middle" fill="#F0997B">9 · search</text></g>
+<g class="stg" data-s="3" data-e="9"><path d="M320 208 L418 208" stroke="#F0997B" stroke-width="1.6" fill="none" marker-end="url(#diagAm3)"/><text class="al" x="370" y="200" text-anchor="middle" fill="#F0997B">10 · auth</text></g>
+<g class="stg" data-s="3" data-e="9"><path d="M560 208 L658 208" stroke="#F0997B" stroke-width="1.6" fill="none" marker-end="url(#diagAm3)"/><text class="al" x="610" y="200" text-anchor="middle" fill="#F0997B">11 · query</text></g>
+<g class="stg" data-s="4" data-e="9"><path d="M470 236 L470 318" stroke="#EF9F27" stroke-width="1.6" fill="none" marker-end="url(#diagAm4)"/><text class="al" x="463" y="285" text-anchor="end" fill="#EF9F27">12 · groups</text></g>
+<g class="stg" data-s="4" data-e="9"><path d="M520 460 L520 378" stroke="#EF9F27" stroke-width="1.6" fill="none" marker-end="url(#diagAm4)"/><text class="al" x="527" y="425" text-anchor="start" fill="#EF9F27">13 · quota</text></g>
+<g class="stg" data-s="4" data-e="9"><path d="M70 516 L70 628 L218 628" stroke="#EF9F27" stroke-width="1.6" fill="none" marker-end="url(#diagAm4)"/><text class="al" x="145" y="620" text-anchor="middle" fill="#EF9F27">14 · notify</text></g>
+<g class="stg" data-s="4" data-e="9"><path d="M320 628 L735 628 L735 518" stroke="#EF9F27" stroke-width="1.6" fill="none" marker-end="url(#diagAm4)"/><text class="al" x="527.5" y="620" text-anchor="middle" fill="#EF9F27">15 · enqueue</text></g>
+<g class="stg" data-s="5" data-e="9"><path d="M810 488 L898 488" stroke="#ED93B1" stroke-width="1.6" fill="none" marker-end="url(#diagAm5)"/><text class="al" x="855" y="480" text-anchor="middle" fill="#ED93B1">16 · read</text></g>
+<g class="stg" data-s="5" data-e="9"><path d="M965 460 L965 138 L812 138" stroke="#ED93B1" stroke-width="1.6" fill="none" marker-end="url(#diagAm5)"/><text class="al" x="958" y="300" text-anchor="end" fill="#ED93B1">17 · update ACL</text></g>
+</svg>
+  <div class="stage-text"><div class="t"></div><div class="d"></div></div>
+  <div class="btns"><button class="btn" type="button" data-act="prev">← Önceki</button><button class="btn" type="button" data-act="next">Sonraki →</button><button class="btn" type="button" data-act="all">Hepsi</button></div>
+</div>
+<details class="note arrows" open><summary><b>Okların açıklaması</b></summary><div class="table-wrap"><table><tr><th>No</th><th>Nereden → nereye</th><th>Ne yapar?</th></tr><tr><td style="white-space:nowrap"><span class="dot" style="background:#EF9F27"></span><b>12</b></td><td style="white-space:nowrap">Search API → Redis</td><td>Kullanıcının gruplarını cache'ten okur (<code>groups:…</code>, 5 dk).</td></tr><tr><td style="white-space:nowrap"><span class="dot" style="background:#EF9F27"></span><b>13</b></td><td style="white-space:nowrap">Sync worker → Redis</td><td>Kaynak API kotası: token bucket (<code>quota:…</code>). Kota bittiyse bekler, kaynağı boğmaz.</td></tr><tr><td style="white-space:nowrap"><span class="dot" style="background:#EF9F27"></span><b>14</b></td><td style="white-space:nowrap">Source apps → Webhooks</td><td>Kaynak "şu doküman değişti" der.</td></tr><tr><td style="white-space:nowrap"><span class="dot" style="background:#EF9F27"></span><b>15</b></td><td style="white-space:nowrap">Webhooks → Kafka</td><td>İmza doğrulanır, sadece kuyruğa yazılır, hemen 204 dönülür. İşi worker yapar.</td></tr><tr><td style="white-space:nowrap"><span class="dot" style="background:#ED93B1"></span><b>16</b></td><td style="white-space:nowrap">Kafka → ACL worker</td><td>Öncelikli <code>acl-changes</code> topic'ini okur. Sync worker ve webhook'lar izin değişikliği görünce bu topic'e yazar.</td></tr><tr><td style="white-space:nowrap"><span class="dot" style="background:#ED93B1"></span><b>17</b></td><td style="white-space:nowrap">ACL worker → Postgres</td><td><code>document_acl</code>'i günceller ya da dokümanı siler; arama hemen etkilenir.</td></tr></table></div></details>
+<details class="note"><summary><b>Aşamaların yazılı özeti</b></summary><ol class="small"><li><b>4 · Follow-up: ölçek ve tazelik.</b> <b>Sorulursa ekle.</b> <a href="sozluk.html#redis" target="_blank" rel="noopener">Redis</a> iki iş görür: Search API kullanıcının grup üyeliğini cache'ten okur (ok 12), sync worker kaynak API kotası için token bucket kullanır (ok 13). <a href="sozluk.html#webhook" target="_blank" rel="noopener">Webhooks</a>: kaynak "şu doküman değişti" der (ok 14); imzayı doğrulayıp sadece Kafka'ya yazarız (ok 15), polling'i beklemeyiz.</li><li><b>5 · Follow-up: izin iptali.</b> <b>Sorulursa ekle</b>, ör. "Ali'nin erişimi kaldırıldı, ne kadar sürede yansır?" İzin iptali ve silme ayrı, öncelikli <code>acl-changes</code> topic'inden gider: sync worker ve webhook'lar izin değişikliğini buraya yazar, <a href="sozluk.html#acl" target="_blank" rel="noopener">ACL worker</a> okur (ok 16) ve <code>document_acl</code>'i günceller (ok 17). Büyük bir tenant'ın ilk senkronu bunu bekletemez.</li></ol></details>
+<h2 id="veri">Bu aşamaların verisi</h2>
+<div class="dm"><div class="dm-card"><div class="dm-kind">Redis · 4. aşama</div><pre><b>groups:ten_42:user_ali</b>
+  tip: SET, TTL 5 dk
+  group:hr@acme.com
+  group:eng@acme.com</pre></div><div class="dm-card"><div class="dm-kind">Redis · 4. aşama</div><pre><b>quota:ten_42:src_8f2</b>
+  tip: token bucket
+  tokens: 37
+  refilled_at: 12:00:05</pre></div><div class="dm-card"><div class="dm-kind">Kafka · 5. aşama</div><pre><b>acl-changes</b>
+  key: doc_77    (document_id)
+  value: {"op":"revoke",
+          "principal":"user:ali@acme.com"}</pre></div></div>
+<h2 id="followup">Follow-up soruları</h2>
+<p class="small muted">Önce soruyu oku, 20 saniyede kendi cevabını sesli söyle, sonra aç. Genel sorular: <a href="../sorular.html">Genel takip soruları</a>.</p>
+<details class="term qa"><summary><b>1.</b> A big tenant connects 5 million documents. What happens to the other tenants?</summary>
+<p class="small muted" style="margin:8px 0 4px">Ana fikir: Tenant başına eşzamanlılık sınırı ve iki şerit: ilk yükleme (backfill) ve canlı değişiklikler ayrı.</p>
+<div class="say">Each tenant gets a concurrency limit, so one onboarding can't take all workers. I'd also split backfill from live changes, so small tenants' updates don't wait behind five million documents.</div>
+</details>
+<details class="term qa"><summary><b>2.</b> The source API returns 429.</summary>
+<p class="small muted" style="margin:8px 0 4px">Ana fikir: Kaynak başına token bucket, Retry-After'a uy, mesajı gecikmeli tekrar kuyruğa koy; worker'ı uyutma.</p>
+<div class="say">We keep a token bucket per tenant and source in Redis, respect Retry-After, and re-queue the work with a delay instead of making the worker sleep, so other sources keep moving.</div>
+</details>
+<details class="term qa"><summary><b>3.</b> A webhook gets lost.</summary>
+<p class="small muted" style="margin:8px 0 4px">Ana fikir: Webhook hız içindir, doğruluk polling'den gelir; periyodik polling devam eder.</p>
+<div class="say">Webhooks make us faster, polling makes us correct. The periodic sync with the delta cursor still runs, so a lost webhook only delays the change.</div>
+</details>
+<details class="term qa"><summary><b>4.</b> Someone's access is removed. How fast is it reflected?</summary>
+<p class="small muted" style="margin:8px 0 4px">Ana fikir: Öncelikli acl-changes şeridi; SLO p99 < 5 dk; arama fail closed.</p>
+<div class="say">Permission changes go through a separate priority topic and worker, so they don't wait behind a big sync. The target is under five minutes at p99, and search fails closed if permissions are unknown.</div>
+</details>
+<details class="term qa"><summary><b>5.</b> The source's cursor token expires.</summary>
+<p class="small muted" style="margin:8px 0 4px">Ana fikir: Kontrollü tam tarama; hash ile değişmeyenleri atla; upsert sayesinde tekrar zararsız.</p>
+<div class="say">Then I do a controlled full rescan for that source. Unchanged documents are skipped by hash, and because writes are upserts, nothing gets duplicated.</div>
+</details>
+<details class="term qa"><summary><b>6.</b> How do you scale the workers?</summary>
+<p class="small muted" style="margin:8px 0 4px">Ana fikir: Lag'e göre (KEDA); üst sınır partition sayısı; asıl sınır kaynak kotaları.</p>
+<div class="say">Workers scale on consumer lag, not CPU, up to the number of partitions. In practice the source quotas are the real limit, so more workers only help up to that point.</div>
+</details>
+<nav class="pager"><a href="hata.html">← 4 · Hata ve güvenlik</a><a href="sozluk.html">Sözlük →</a></nav>
+</main>
+<footer>Kişisel çalışma notları. Senaryolar alıştırma amaçlıdır; şirket adları anonimleştirilmiştir.</footer>
+<script>initStepper("diagA", [{"n": "1 · Temel istek", "c": "#AFA9EC", "d": "Admin bir kaynağı bağlar ve sync başlatır (ok 1). İstek önce <a href=\"sozluk.html#gateway\" target=\"_blank\" rel=\"noopener\">gateway</a>'den geçer: JWT doğrulama, rate limit (ok 2). Kimlik doğrulama en basit sürümde bile pazarlık konusu değildir. <a href=\"sozluk.html#api\" target=\"_blank\" rel=\"noopener\">Knowledge Sources API</a> isteği doğrular, <a href=\"sozluk.html#postgres\" target=\"_blank\" rel=\"noopener\">Postgres</a>'e bir <code>sync_jobs</code> satırı yazar (ok 3) ve hemen 202 + sync id döner. Henüz iş yapılmıyor; sadece sözleşme ve kalıcı kayıt var."}, {"n": "2 · Asenkron sync", "c": "#5DCAA5", "d": "Aynı transaction'da bir <a href=\"sozluk.html#pending-events\" target=\"_blank\" rel=\"noopener\">pending_events</a> satırı da yazılır. <a href=\"sozluk.html#pending-events\" target=\"_blank\" rel=\"noopener\">Event publisher</a> bu satırları okur (ok 4) ve <a href=\"sozluk.html#kafka\" target=\"_blank\" rel=\"noopener\">Kafka</a>'daki <code>sync-jobs</code> topic'ine yazar (ok 5); Kafka'nın neden ilk çözümde olduğu diyagramın altında. <a href=\"sozluk.html#sync-worker\" target=\"_blank\" rel=\"noopener\">Sync worker</a> mesajı alır (ok 6), kaynaktan değişiklikleri cursor ile sayfa sayfa çeker (ok 7), hash'i aynıysa atlar, dokümanları ve izinleri Postgres'e upsert eder (ok 8). Worker offset'i commit etmeden çökerse mesaj tekrar okunur; upsert idempotent olduğu için sorun olmaz."}, {"n": "3 · Arama", "c": "#F0997B", "d": "Kullanıcı ya da agent arama yapar (ok 9); istek yine gateway'den geçer (ok 10). Search API tek bir SQL sorgusunda önce tenant ve izinle (<a href=\"sozluk.html#acl\" target=\"_blank\" rel=\"noopener\">ACL</a>, <code>document_acl</code> tablosu) filtreler, sonra alakaya göre sıralar (ok 11). Kullanıcı sadece kaynakta görebildiğini görür. Sıralamanın nasıl yapıldığı (arama indeksi) bu turun konusu değil."}, {"n": "4 · Follow-up: ölçek ve tazelik", "c": "#EF9F27", "d": "<b>Sorulursa ekle.</b> <a href=\"sozluk.html#redis\" target=\"_blank\" rel=\"noopener\">Redis</a> iki iş görür: Search API kullanıcının grup üyeliğini cache'ten okur (ok 12), sync worker kaynak API kotası için token bucket kullanır (ok 13). <a href=\"sozluk.html#webhook\" target=\"_blank\" rel=\"noopener\">Webhooks</a>: kaynak \"şu doküman değişti\" der (ok 14); imzayı doğrulayıp sadece Kafka'ya yazarız (ok 15), polling'i beklemeyiz."}, {"n": "5 · Follow-up: izin iptali", "c": "#ED93B1", "d": "<b>Sorulursa ekle</b>, ör. \"Ali'nin erişimi kaldırıldı, ne kadar sürede yansır?\" İzin iptali ve silme ayrı, öncelikli <code>acl-changes</code> topic'inden gider: sync worker ve webhook'lar izin değişikliğini buraya yazar, <a href=\"sozluk.html#acl\" target=\"_blank\" rel=\"noopener\">ACL worker</a> okur (ok 16) ve <code>document_acl</code>'i günceller (ok 17). Büyük bir tenant'ın ilk senkronu bunu bekletemez."}]);</script>
+</body>
+</html>

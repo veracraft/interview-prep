@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deployment API · Kapsam</title>
+<link rel="stylesheet" href="../assets/site.css?v=11">
+</head>
+<body>
+<header class="topbar"><div class="topbar-inner">
+  <a class="brand" href="../index.html">Mülakat Hazırlığı</a>
+  <nav>
+    <a href="../index.html">Ana sayfa</a>
+    <a href="../knowledge-sync/kapsam.html">Knowledge Sync</a>
+    <a href="../agent-tasks/kapsam.html">Agent Tasks</a>
+    <a class="active" href="kapsam.html">Deployment API</a>
+  </nav>
+</div>
+<div class="subnav"><nav>
+    <a class="active" href="kapsam.html">1 · Kapsam</a>
+    <a href="api.html">2 · API</a>
+    <a href="cozum.html">3 · Minimum çözüm</a>
+    <a href="hata.html">4 · Hata ve güvenlik</a>
+    <a href="olcek.html">5 · Ölçek ve follow-up</a>
+    <a href="sozluk.html">Sözlük</a>
+    <a href="mock.html">Mock</a>
+</nav></div></header>
+
+<main class="wide">
+<h1>Deployment API · 1. Kapsam</h1>
+<div class="step-hint"><b>Playbook 1/5 · Kapsam.</b> Ne yaparsın: kim kullanıyor, ana işlem ne, veri ne büyüklükte, ne kadar güncel olmalı? 5 dakikayı geçme. Gösterdiğin: doğru problemi çözdüğünü.</div>
+<p class="lead">Infrastructure Engineer rolüne en yakın soru: ürün değil, bir iç platform API'si. Desenler diğer iki sistemle aynı (202, idempotency, durum makinesi, tek aktif iş); fark, zor kısmın ölçek değil <b>doğruluk ve güvenlik</b> olması. Yürütmeyi sıfırdan yazmıyoruz: API, şirketin zaten kullandığı <b>GitOps</b>'un (Argo CD) önüne konuyor.</p>
+<h2 id="soru">Soru ve netleştirme</h2>
+  <div class="say">We have about two hundred services, owned by different teams, running on Kubernetes. Today every team deploys in its own way. Design an internal API that teams use to deploy their services, from CI or from a CLI.</div>
+  <div class="table-wrap"><table>
+    <tr><th>Sor</th><th>Varsayılan cevap</th><th>Neyi değiştirir?</th></tr>
+    <tr><td>Kim çağırıyor?</td><td>Çoğunlukla CI, bazen geliştirici (CLI).</td><td>Kimlik doğrulama: CI için OIDC, insan için SSO.</td></tr>
+    <tr><td>Kaç servis, kaç cluster/bölge?</td><td>200 servis, 3 cluster, 2 bölge.</td><td>Ölçek küçük; çok cluster follow-up olabilir.</td></tr>
+    <tr><td>Hangi stratejiler?</td><td>Rolling ve canary, otomatik rollback isteniyor.</td><td>Metrik kontrolü ve adım adım rollout.</td></tr>
+    <tr><td>Prod için onay?</td><td>Evet, ikinci bir kişi.</td><td><code>awaiting_approval</code> durumu ve <code>:approve</code> aksiyonu.</td></tr>
+    <tr><td>Image'lar imzalı mı?</td><td>Evet, CI imzalıyor.</td><td>Sadece imzalı image kabul et.</td></tr>
+  <tr><td>Hangi araçlar zaten var?</td><td>Kubernetes, Argo CD (GitOps) ve Terraform; Argo Rollouts kurulabilir.</td><td>Yürütme onlarda; API politika ve durum katmanı. <a href="cozum.html#neden-api">Neden API? →</a></td></tr></table></div>
+  <div class="say">So it's not a big-scale problem, a few hundred deploys a day. The hard parts are correctness, like two deploys at the same time or a rollout that stops in the middle, and security: who can deploy what.</div>
+
+  <h2 id="gereksinim">Gereksinimler ve ölçek</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Fonksiyonel</th><th>Fonksiyonel olmayan</th></tr>
+    <tr><td>Deploy başlat, durumunu gör, geçmişi listele, iptal et, geri al (rollback), prod onayı.</td>
+        <td>API %99.9 (ama API çökse bile çalışan servisler etkilenmez) · deploy p95 &lt; 15 dk · aynı istek iki deploy başlatmaz · takım sadece kendi servisini deploy eder · her şey audit'li.</td></tr>
+  </table></div>
+  <p class="small muted">Kaba ölçek: 200 servis, 40 takım, günde ~500 deploy, tepe saatte ~50 eşzamanlı rollout. Bu sayılar küçük; o yüzden Kafka gibi parçalara gerek yok.</p>
+
+  
+<nav class="pager"><a href="../index.html">← Playbook</a><a href="api.html">2 · API →</a></nav>
+</main>
+<footer>Kişisel çalışma notları. Senaryolar alıştırma amaçlıdır; şirket adları anonimleştirilmiştir.</footer>
+
+</body>
+</html>
